@@ -1,0 +1,45 @@
+# OS & Editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Temp, Staging & Scratch
+tmp/
+temp/
+.scratch/
+*.tmp
+*.bak
+*.orig
+
+# Logs & Test Outputs
+logs/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Secrets & Credentials (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*credentials*
+*secret*
+
+# Transient Agent Status Runtime Files
+status/*.tmp
+status/*.lock
+
+# Language / Tooling Caches
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+build/
