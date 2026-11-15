@@ -32,3 +32,9 @@ When this rule is activated (or when performing multi-file refactors, complex fe
   - Verify that no API keys, tokens, passwords, or private environment settings are committed.
 - Verify a clean rollback strategy exists (e.g., `git revert <commit>`).
 - Require a structured QA Overwatch sign-off (`APPROVE` verdict) before requesting integration into the base branch.
+
+---
+
+## 4. Live User-Facing Progress Updates
+- Deliver clear, self-contained progress updates as each batch or phase finishes rather than waiting until the entire project ends or assuming the user read internal logs/`AGENT_BUS.md`.
+- Summarize what changed and why, technical tradeoffs, any QA catches/fixes, verification results, and what parallel work runs next (keeping output concise and secret-free).

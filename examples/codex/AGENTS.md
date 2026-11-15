@@ -19,6 +19,8 @@ This file establishes the **Agent Overwatch** rules for the Codex CLI environmen
    - If a rollback command is missing or untested, the action must be halted.
 5. **Zero-Secret Invariant:**
    - Never hardcode or echo secrets, tokens, or private keys. Sourced strictly via environment variables or secret stores.
+6. **Live User-Facing Progress Updates:**
+   - Deliver self-contained progress updates after each completed phase or batch rather than waiting until the end or assuming the user inspected internal logs/`AGENT_BUS.md`. Summarize what changed and why, key technical tradeoffs, QA catches/fixes, test outcomes, and next parallel steps without pasting raw log spam or secrets.
 
 ---
 

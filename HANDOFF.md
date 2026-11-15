@@ -3,14 +3,15 @@
 ## 1. Purpose
 `agent-overwatch` is a general-purpose, cross-platform multi-agent orchestration skill, Antigravity plugin bundle, multi-tool installer, and portable subagent role suite designed around **high-velocity parallel execution gated by mandatory independent QA**.
 
-## 2. Current State (as of 2026-11-15 23:17 UTC)
-- **`main` branch (`4bc4493`):** Complete implementation merged incrementally via three QA-approved `--no-ff` feature branches:
+## 2. Current State (as of 2026-11-15 23:21 UTC)
+- **`main` branch (`ed9ee17`):** Complete baseline + all 4 prior QA-approved `--no-ff` merges:
   1. `237b465` — `chore: initialize agent-overwatch repository` (baseline `.gitignore`, `README.md`, `HANDOFF.md`, `AGENT_BUS.md`)
   2. `4433d18` — `Merge feat/core-skill-and-agents` (`285f96f`, `QA APPROVE`): `plugin.json`, `skills/agent-overwatch/SKILL.md`, 4 `references/*.md` guides, and 4 portable `agents/*.md` subagents
   3. `bc98b82` — `Merge feat/templates-and-examples` (`66ac9f5`, `QA APPROVE`): 4 `skills/agent-overwatch/templates/*.template.md` starters and 10 multi-tool `examples/` files (Antigravity, Claude Code, Codex CLI, Cursor, Gemini CLI, GitHub)
   4. `4bc4493` — `Merge feat/scripts-and-installer` (`617aa94`, `QA APPROVE`): executable `install.sh`, `skills/agent-overwatch/scripts/init_workspace.sh`, `skills/agent-overwatch/scripts/verify_atomic_branch.sh`, and updated `README.md` / `SKILL.md` links
-- **Workspace hygiene:** All merged atomic feature branches deleted cleanly; temporary sibling staging directories (`../agent-overwatch-staging-b2a` and `../agent-overwatch-staging-b2b`) removed and verified never tracked in git.
-- **Active branch (`docs/final-handoff`):** Cut from `main` @ `4bc4493` to finalize `HANDOFF.md` and `AGENT_BUS.md` — **awaiting final `qa-overwatch` audit before merge to `main`**.
+  5. `ed9ee17` — `Merge docs/final-handoff` (`71e8b37`, `QA APPROVE`): recorded 3-merge history, 31-file layout, and staging cleanup
+- **Workspace hygiene:** All merged atomic branches deleted cleanly; temporary sibling staging directories (`../agent-overwatch-staging-b2a` and `../agent-overwatch-staging-b2b`) removed and verified never tracked in git.
+- **Active branch (`feat/user-progress-updates`):** Cut from `main` @ `ed9ee17` to add live self-contained user-facing progress reporting requirements across `SKILL.md`, `references/agent-roles.md`, tool examples, and `install.sh` — **awaiting `qa-overwatch` audit before merge to `main`**.
 
 ## 3. Repository Layout on `main` (31 tracked files)
 - **Root (6):** `.gitignore`, `AGENT_BUS.md`, `HANDOFF.md`, `README.md`, `install.sh`, `plugin.json`
@@ -30,7 +31,7 @@
 - Repo-wide `plugin.json`, YAML frontmatter (`SKILL.md`, `agents/*.md`, Cursor `.mdc`, GitHub Issue template), TOML (`agent-overwatch.toml`), relative link resolution (32 links), and secret/hygiene checks passed
 
 ## 5. Next Steps
-1. Complete `qa-overwatch` final audit on `docs/final-handoff` and merge `--no-ff` to `main`.
+1. Complete `qa-overwatch` audit on `feat/user-progress-updates` and merge `--no-ff` to `main`.
 2. User can install locally (`./install.sh --antigravity --global`, `./install.sh --all --workspace <project>`) or push to a remote repository when ready.
 
 ## 6. Repo Conventions

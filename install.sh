@@ -295,6 +295,7 @@ This workspace adheres to the Agent Overwatch operating model:
 - **QA Gate:** Every plan, atomic branch, and live deployment requires independent read-only `qa-agent` approval (`QA APPROVE`).
 - **Atomic Branches:** Use dedicated short-lived branches (`feat/*`, `fix/*`, `docs/*`). Never commit directly to `main` or `master`.
 - **Coordination:** Maintain living state in `HANDOFF.md` and chronological audit log in `AGENT_BUS.md` (unless superseded by runtime native board).
+- **User Updates:** Deliver clear, self-contained user-facing progress updates as batches/phases finish (what changed and why, technical tradeoffs, QA catches/fixes, test outcomes, and what runs next) without assuming the user reads internal agent messages or `AGENT_BUS.md`.
 - **Secret Hygiene:** Never commit tokens, credentials, passwords, or private keys.
 # <<< AGENT-OVERWATCH END <<<
 SNIPPET_EOF

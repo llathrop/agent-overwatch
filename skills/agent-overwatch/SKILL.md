@@ -33,6 +33,7 @@ Assign every participant one clear role. Keep author/ops lanes and verification 
   1. Decompose work into non-overlapping slices (by file, directory, service, branch, or question).
   2. Issue **self-contained briefs**: exact owned scope, off-limits files/systems, required inputs, verification criteria, and who receives the handoff next.
   3. Dispatch parallel workers immediately, keep turns short, monitor status, and route outputs directly to QA without paraphrasing away exact paths or raw logs.
+  4. Post **self-contained user-facing progress updates** after each completed batch or phase (never waiting until everything finishes or assuming the user reads internal agent messages or `AGENT_BUS.md`).
 - **Strict boundaries:** Do not write large diffs, run long debugging loops, or perform slow manual checks inline while workers wait. Never override or bypass a `QA HOLD`.
 - **Mandatory QA pairing:** Maintain roughly **1 `qa-agent` per 2–4 active workers**. Track every deliverable through `QA APPROVE` before allowing implementation on a plan, merge of a branch, or promotion of a release.
 
@@ -132,7 +133,22 @@ Deliver cleanly in small, independently verifiable increments (full playbook in 
 
 ---
 
-## 7. Reference & Tooling Library
+## 7. Live User-Facing Progress Updates
+
+Keep the user continuously informed in plain, self-contained summaries as agents launch and finish work phases:
+
+- **Report continuously, not just at the end:** Summarize progress whenever a meaningful batch, branch, or QA gate finishes and when dispatching the next parallel lanes.
+- **Never assume shared internal context:** The user may not see native subagent messages, swarm boards, raw logs, or `AGENT_BUS.md`. State enough context so every update stands on its own without cryptic internal IDs.
+- **What every milestone update should cover:**
+  1. **What changed and why** — concrete deliverables, key technical decisions, and notable tradeoffs.
+  2. **QA catches and fixes** — any bugs, failing checks, edge cases, or hygiene/secret issues caught by `qa-agent` and how the originating agent fixed them.
+  3. **Verification evidence** — concise pass/fail summary of tests, syntax/lint checks, or health probes observed (no raw terminal log dumps).
+  4. **What runs next** — active or newly dispatched parallel lanes and any decision/confirmation needed from the user.
+- **Strict boundary:** Stay concise and never paste secrets, tokens, keys, or raw credential values into progress messages.
+
+---
+
+## 8. Reference & Tooling Library
 
 - [references/agent-roles.md](./references/agent-roles.md) — Brief templates, anti-patterns, per-role QA checklists, and installer tool mappings
 - [references/coordination-files.md](./references/coordination-files.md) — `HANDOFF.md` / `AGENT_BUS.md` schemas, supersession matrix, and monorepo scoping

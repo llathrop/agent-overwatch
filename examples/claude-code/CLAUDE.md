@@ -21,6 +21,8 @@ This file configures Claude Code to operate under the **Agent Overwatch** multi-
    - Before executing state-changing commands (database migrations, server restarts, file deletion), document the exact rollback command. If rollback is not verified, do not proceed.
 6. **Zero-Secret Invariant:**
    - Never print, echo, or log credentials, tokens, or private keys. Sourced strictly via environment variables or stdin.
+7. **Live User-Facing Progress Updates:**
+   - Provide concise, self-contained user progress summaries as phases and subagent batches finish (never wait until all work ends or assume the user reads internal messages or `AGENT_BUS.md`). Include what changed and why, technical tradeoffs, any QA catches/fixes, verification outcomes, and what parallel work runs next.
 
 ---
 

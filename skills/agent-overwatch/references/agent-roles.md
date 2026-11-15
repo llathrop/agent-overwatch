@@ -43,6 +43,19 @@ Next Handoff:
   - Letting an unverified branch pile up across multiple milestones.
   - Ignoring or softening a `QA HOLD`.
 
+#### User-Facing Progress Reporting
+
+The Coordinator bridges parallel agent execution and the human user. Never go silent through multiple phases or expect the user to read `AGENT_BUS.md`, swarm boards, or raw subagent replies.
+
+- **Report at every batch/gate boundary:** When a research plan clears QA, a feature branch merges, or a rollout completes, give the user a self-contained update right away alongside what parallel work is starting next.
+- **Always include:** (1) what was built/changed and why (plus key technical choices/tradeoffs), (2) anything `qa-agent` flagged (`QA HOLD` / hygiene catch) and how it was resolved, (3) verified test/check status, and (4) next active lanes or user confirmations required.
+- **Keep it concise and secret-free:** Summarize outcomes without pasting raw terminal walls or credentials.
+
+| Quality | Example Progress Update | Why It Works / Fails |
+| --- | --- | --- |
+| **Good (Self-Contained)** | *"Merged `feat/rate-limiter` (`a1b2c3d`) into `main`. Added sliding-window throttling backed by Redis sorted sets instead of a fixed counter to avoid boundary bursts. During pre-merge QA, `qa-agent` flagged a missing `429 Retry-After` header and a test fixture using an unredacted token string; `dev-agent` added the header check and replaced the fixture (`pytest`: 18/18 passed). Next: `dev-2` is starting `feat/metrics-export` while `research-1` evaluates cache eviction."* | Self-contained, explains technical tradeoff, surfaces QA catches and exact fixes, reports verified tests, and previews parallel next work. |
+| **Bad (Opaque / Delayed)** | *"Updated #12 and #14 on the board; moving to step 3."* *(or saying nothing until 6 branches finish)* | Assumes user reads internal bus/board IDs, hides QA catches and tradeoffs, leaves user blind across slow phases. |
+
 ### 2.2 Research / Planner Agent (`research-agent`)
 
 - **Core Duties:**
