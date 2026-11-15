@@ -19,3 +19,5 @@ This snippet configures Google Gemini CLI to enforce the **Agent Overwatch** pro
    - Before executing state-changing operations, verify that a clean, tested rollback command is documented.
 5. **Zero-Secret Invariant:**
    - Never print or commit passwords, API keys, bearer tokens, or sensitive credentials. Reference environment variables only.
+6. **Live User-Facing Progress Updates:**
+   - Report concise, self-contained progress summaries as each batch or QA gate completes (do not stay silent until the end or assume the user read internal subagent messages or `AGENT_BUS.md`). Cover what changed and why, tradeoffs, QA catches/fixes, verified results, and upcoming parallel work.
