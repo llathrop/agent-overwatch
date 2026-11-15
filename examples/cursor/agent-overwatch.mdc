@@ -1,0 +1,34 @@
+---
+description: "Enforce Agent Overwatch multi-agent workflow: atomic branching, parallel non-dependent work, HANDOFF.md updates, and mandatory QA review."
+globs: "**/*"
+alwaysApply: false
+---
+
+# Agent Overwatch Protocol for Cursor
+
+When this rule is activated (or when performing multi-file refactors, complex feature implementations, or multi-agent workflows), you must adhere to the **Agent Overwatch** engineering standards.
+
+---
+
+## 1. Atomic Branching & Scope Isolation
+- Operate exclusively on dedicated, single-purpose branches: `feat/<name>` or `fix/<name>`.
+- Do not make opportunistic or unrelated edits outside the agreed workstream scope.
+- If multiple workstreams are being developed in parallel, ensure they touch independent files and non-overlapping modules.
+
+---
+
+## 2. Living Handoff Synchronization (`HANDOFF.md`)
+- If `HANDOFF.md` exists in the repository root, inspect it before beginning work to understand the active branch and architectural constraints.
+- Upon completing a milestone or opening a pull request, update `HANDOFF.md`:
+  - Update the workstream status (`IN_PROGRESS`, `QA_READY`, or `DONE`).
+  - Document deliverables, passing test evidence, and remaining blockers.
+
+---
+
+## 3. Mandatory QA Review & Verification
+- Never declare a task complete or push changes without verification.
+- Run local automated tests and linters; confirm zero failures and zero unhandled warnings.
+- Perform a secret scan across your diff:
+  - Verify that no API keys, tokens, passwords, or private environment settings are committed.
+- Verify a clean rollback strategy exists (e.g., `git revert <commit>`).
+- Require a structured QA Overwatch sign-off (`APPROVE` verdict) before requesting integration into the base branch.
