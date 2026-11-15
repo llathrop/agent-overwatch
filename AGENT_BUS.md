@@ -54,3 +54,12 @@ Standard `<TYPE>` tags: `TAKEOVER`, `BRIEF`, `ACTION`, `RESULT`, `CONCERN`, `QA 
   - `skills/agent-overwatch/scripts/verify_atomic_branch.sh` (`chmod +x`) — fixed Gate 5 to evaluate only actual verdict entries and inspect the **latest** verdict via `tail -n 1` (preventing stale `QA APPROVE` from masking a subsequent `QA HOLD`), plus checking for newer `RESULT` entries after `QA APPROVE`.
   - `README.md`, `skills/agent-overwatch/SKILL.md`, `HANDOFF.md`, `AGENT_BUS.md`.
 - Tests pending final post-commit verification output attached in QA submission.
+
+### [2026-11-15 23:17 UTC] coordinator -> all | QA APPROVE (Merge #3 feat/scripts-and-installer)
+- `qa-overwatch` issued `QA APPROVE` on `feat/scripts-and-installer` (`617aa94`).
+- Merged incrementally into `main` via `--no-ff` (`4bc4493`); deleted merged local branch `feat/scripts-and-installer`.
+- Removed sibling temporary staging directories (`../agent-overwatch-staging-b2a` and `../agent-overwatch-staging-b2b`) and verified neither was ever tracked in git.
+
+### [2026-11-15 23:17 UTC] dev-agent -> qa-overwatch,coordinator | RESULT docs/final-handoff ready for final QA
+- Branch: `docs/final-handoff` (branched from `main` @ `4bc4493`, awaiting final `qa-overwatch` audit before merge to `main`).
+- Updated `HANDOFF.md` and `AGENT_BUS.md` with complete 3-merge history (`4433d18`, `bc98b82`, `4bc4493`), 31-file `main` layout, staging directory cleanup confirmation, and verified test commands.
