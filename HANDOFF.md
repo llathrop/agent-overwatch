@@ -1,19 +1,20 @@
 # HANDOFF — Agent Overwatch
 
 ## 1. Purpose
-`agent-overwatch` is a general-purpose multi-agent orchestration skill, plugin bundle, and subagent role suite designed for parallel execution with mandatory read-only QA overwatch, atomic Git/GitHub branching, and clean coordination across any software or operations repository.
+`agent-overwatch` is a general-purpose multi-agent orchestration skill, plugin bundle, installer, and subagent role suite designed for parallel execution with mandatory read-only QA overwatch, atomic Git/GitHub branching, and clean coordination across any software or operations repository.
 
-## 2. Current State (as of 2026-11-15 23:08 UTC)
-- **Main branch (`main`):** `@ 4433d18` (`feat/core-skill-and-agents` `@ 285f96f` received `QA APPROVE` from `qa-overwatch` and merged incrementally via `--no-ff`).
-- **Active branch:** `feat/templates-and-examples` (branched from `main` @ `4433d18`) — **ready for `qa-overwatch` pre-merge audit** (not yet merged to `main`).
-- **Completed in Atomic Branch 2 (`feat/templates-and-examples`):**
-  - `skills/agent-overwatch/templates/`: `HANDOFF.template.md`, `SUBDIR_HANDOFF.template.md`, `AGENT_BUS.template.md`, `QA_CHECKLIST.template.md`
-  - `examples/`: `antigravity/`, `claude-code/`, `codex/`, `cursor/`, `gemini-cli/`, `github/` (`ISSUE_TEMPLATE/atomic_task.md`, `PULL_REQUEST_TEMPLATE.md`)
-- **Validation:** YAML frontmatter (`examples/cursor/agent-overwatch.mdc`, `examples/github/ISSUE_TEMPLATE/atomic_task.md`), TOML (`examples/gemini-cli/agent-overwatch.toml`), relative markdown link resolution, and domain-neutrality/hygiene checks passed locally after final edits.
+## 2. Current State (as of 2026-11-15 23:13 UTC)
+- **Main branch (`main`):** `@ bc98b82` (`feat/templates-and-examples` `@ 66ac9f5` received `QA APPROVE` from `qa-overwatch` and merged incrementally via `--no-ff`).
+- **Active branch:** `feat/scripts-and-installer` (branched from `main` @ `bc98b82`) — **ready for `qa-overwatch` pre-merge audit** (not yet merged to `main`).
+- **Completed in Atomic Branch 3 (`feat/scripts-and-installer`):**
+  - `install.sh` (executable multi-tool installer supporting `--antigravity`, `--claude`, `--codex`, `--gemini`, `--cursor`, `--github`, `--all`, `--global`/`--workspace`, `--dry-run`, `--force`; includes safe `sys.argv`/`stdin` instruction updates and multiline-YAML-safe Antigravity/Claude agent mapping)
+  - `skills/agent-overwatch/scripts/init_workspace.sh` (root and `--subdir` scaffolding with `--no-bus`, `--dry-run`, `--force`)
+  - `skills/agent-overwatch/scripts/verify_atomic_branch.sh` (5-gate pre-merge checker including latest-verdict Gate 5 inspection)
+  - Updated `README.md` and `skills/agent-overwatch/SKILL.md` links to include `install.sh`, `templates/`, `scripts/`, and `examples/`.
 
 ## 3. Ordered Next Steps
-1. **QA gate on Atomic Branch 2 (`feat/templates-and-examples`):** `qa-overwatch` audits templates, examples, syntax, links, and hygiene before `--no-ff` merge to `main`.
-2. **Atomic Branch 3 (`feat/installers-and-validation`):** Cut from updated `main` after Branch 2 merges; deliver cross-tool `install.sh` (`--dry-run`, idempotency across Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor) plus automated smoke tests/validators.
+1. **QA gate on Atomic Branch 3 (`feat/scripts-and-installer`):** `qa-overwatch` audits `install.sh`, `init_workspace.sh`, `verify_atomic_branch.sh`, and doc links before `--no-ff` merge to `main`.
+2. **Post-merge cleanup & live user installation:** After Branch 3 receives `QA APPROVE` and merges to `main`, clean up sibling temporary staging directories (`../agent-overwatch-staging-b2a` and `../agent-overwatch-staging-b2b`) and run any desired user-requested `--global` or `--workspace` installs.
 
 ## 4. Repo Conventions
 - **Never commit secrets.** `.gitignore` blocks `.env*`, keys, and temp files.

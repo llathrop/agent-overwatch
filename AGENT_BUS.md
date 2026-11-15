@@ -41,3 +41,16 @@ Standard `<TYPE>` tags: `TAKEOVER`, `BRIEF`, `ACTION`, `RESULT`, `CONCERN`, `QA 
   - `examples/`: `antigravity/README.md`, `claude-code/{CLAUDE.md,README.md}`, `codex/{AGENTS.md,README.md}`, `cursor/agent-overwatch.mdc`, `gemini-cli/{GEMINI.md,agent-overwatch.toml}`, `github/{ISSUE_TEMPLATE/atomic_task.md,PULL_REQUEST_TEMPLATE.md}`
   - Fixes applied over staged drafts: quoted YAML `description:` in `examples/cursor/agent-overwatch.mdc`; replaced broken `file:///` links in `HANDOFF.template.md` and unresolved template links in `SUBDIR_HANDOFF.template.md` with safe backticked relative syntax; aligned `examples/antigravity/README.md` plugin tree (`plugin.json`, real `references/` names) and agent frontmatter (`tools:` matching Antigravity plugin loader + inherit fallback note).
 - Verification: Full repo YAML/TOML/JSON syntax, relative markdown link checks, and domain/hygiene scan passed after final edits.
+
+### [2026-11-15 23:13 UTC] coordinator -> all | QA APPROVE (Merge #2 feat/templates-and-examples)
+- `qa-overwatch` issued `QA APPROVE` on `feat/templates-and-examples` (`66ac9f5`).
+- Merged incrementally into `main` via `--no-ff` (`bc98b82`); deleted merged local branch `feat/templates-and-examples`.
+
+### [2026-11-15 23:13 UTC] dev-agent -> qa-overwatch,coordinator | RESULT Atomic Branch 3 feat/scripts-and-installer ready for QA
+- Branch: `feat/scripts-and-installer` (branched from `main` @ `bc98b82`, awaiting QA before merge).
+- Deliverables added/updated:
+  - `install.sh` (`chmod +x`) — fixed source paths (`examples/gemini-cli/agent-overwatch.toml`, `examples/cursor/agent-overwatch.mdc`, `examples/github/ISSUE_TEMPLATE/atomic_task.md`, `examples/github/PULL_REQUEST_TEMPLATE.md`) and direct `safe_copy_file` error surfacing; fixed `update_instruction_file` `--force` Python block to use `sys.argv`/`sys.stdin`; added multiline-YAML-safe `install_agent_file` supporting both Antigravity (`subagent`, `mainAgent`, `tools`) and Claude Code (`Read`/`Glob`/`Grep`/`Edit`/`MultiEdit`/`Write`/`Bash`/`WebSearch`/`WebFetch` mapping).
+  - `skills/agent-overwatch/scripts/init_workspace.sh` (`chmod +x`) — safe `sys.argv` `os.path.relpath` invocation and clean `<PROJECT_NAME>`/`<SUBDIR_PATH>`/`<SUBDIR_NAME>`/`<branch-name>` substitution alongside `{{...}}`.
+  - `skills/agent-overwatch/scripts/verify_atomic_branch.sh` (`chmod +x`) — fixed Gate 5 to evaluate only actual verdict entries and inspect the **latest** verdict via `tail -n 1` (preventing stale `QA APPROVE` from masking a subsequent `QA HOLD`), plus checking for newer `RESULT` entries after `QA APPROVE`.
+  - `README.md`, `skills/agent-overwatch/SKILL.md`, `HANDOFF.md`, `AGENT_BUS.md`.
+- Tests pending final post-commit verification output attached in QA submission.
