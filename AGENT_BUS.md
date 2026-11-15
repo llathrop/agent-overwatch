@@ -16,3 +16,16 @@
 Standard `<TYPE>` tags: `TAKEOVER`, `BRIEF`, `ACTION`, `RESULT`, `CONCERN`, `QA APPROVE`, `QA HOLD`, `STATUS`.
 
 ---
+
+### [2026-11-15 23:04 UTC] dev-agent -> qa-agent,coordinator | RESULT Step B1 feat/core-skill-and-agents ready for QA
+- Branch: `feat/core-skill-and-agents` (branched from `main` @ `237b465`, awaiting QA before merge).
+- Deliverables added/updated:
+  - `plugin.json`
+  - `skills/agent-overwatch/SKILL.md`
+  - `skills/agent-overwatch/references/agent-roles.md`
+  - `skills/agent-overwatch/references/coordination-files.md`
+  - `skills/agent-overwatch/references/git-and-github-workflow.md`
+  - `skills/agent-overwatch/references/model-routing-and-scaling.md`
+  - `agents/qa-agent.md`, `agents/research-agent.md`, `agents/dev-agent.md`, `agents/deploy-agent.md`
+  - `HANDOFF.md`, `AGENT_BUS.md`
+- Checks: JSON schema, YAML frontmatter, relative link resolution, portability/tool-neutrality, and domain-neutrality checks passed after final edit.
