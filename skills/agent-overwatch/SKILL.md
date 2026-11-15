@@ -132,9 +132,13 @@ Deliver cleanly in small, independently verifiable increments (full playbook in 
 
 ---
 
-## 7. Reference Library
+## 7. Reference & Tooling Library
 
 - [references/agent-roles.md](./references/agent-roles.md) — Brief templates, anti-patterns, per-role QA checklists, and installer tool mappings
 - [references/coordination-files.md](./references/coordination-files.md) — `HANDOFF.md` / `AGENT_BUS.md` schemas, supersession matrix, and monorepo scoping
 - [references/git-and-github-workflow.md](./references/git-and-github-workflow.md) — Atomic merge cycle, parallel worktrees, GitHub CLI/PR flow, and upstream safety gates
 - [references/model-routing-and-scaling.md](./references/model-routing-and-scaling.md) — Model tier matrix, quota/policy fallback, sharding, and non-dependent dispatch
+- [templates/](./templates/) — Ready-to-copy [HANDOFF.template.md](./templates/HANDOFF.template.md), [SUBDIR_HANDOFF.template.md](./templates/SUBDIR_HANDOFF.template.md), [AGENT_BUS.template.md](./templates/AGENT_BUS.template.md), and [QA_CHECKLIST.template.md](./templates/QA_CHECKLIST.template.md)
+- [scripts/init_workspace.sh](./scripts/init_workspace.sh) — Scaffolds root or `--subdir` workspaces (supports `--no-bus`, `--dry-run`, `--force`)
+- [scripts/verify_atomic_branch.sh](./scripts/verify_atomic_branch.sh) — Enforces branch isolation, clean tree, diff scope, secret scan, and latest QA verdict pre-merge
+- [install.sh](../../install.sh) — Cross-platform installer for Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub templates
