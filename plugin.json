@@ -1,0 +1,6 @@
+{
+  "name": "agent-overwatch",
+  "displayName": "Agent Overwatch: Parallel Multi-Agent Workflow with Mandatory QA",
+  "version": "1.0.0",
+  "description": "High-velocity, parallel multi-agent workflow skill and subagent definitions with mandatory QA overwatch, atomic Git/GitHub branching, model routing, and HANDOFF/AGENT_BUS coordination."
+}
