@@ -52,20 +52,20 @@ Assign every participant one clear role. Keep author/ops lanes and verification 
 - **When to use:** Writing features, bug fixes, tests, refactoring, IaC/configs, CI pipelines, or documentation.
 - **How to use:** Assign one atomic branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and a non-overlapping file scope. Isolate concurrent `dev-agent` instances with strict file ownership or separate `git worktree` checkouts.
 - **Strict boundaries:** Edit only assigned files/worktree; run relevant tests/linters before handoff; never commit credentials or push/merge unreviewed work; never deploy directly to shared production unless explicitly scoped.
-- **Mandatory QA pairing:** **Pre-merge audit.** Before any branch merges to `main`, `qa-agent` inspects the full diff, checks test/lint evidence, audits edge cases and secret hygiene, and posts `QA APPROVE` or `QA HOLD` bound to `<branch>@<sha12>`. Any new commit after an approval needs re-review.
+- **Mandatory QA pairing:** **Pre-merge audit (logic & direction only).** Before any branch merges to `main`, `dev-agent` runs tests/linters and posts the raw outputs; `qa-agent` inspects the full diff, logic, architecture, edge cases, secret hygiene, and posted test evidence (never running tests or builds itself), and posts `QA APPROVE` or `QA HOLD` bound to `<branch>@<sha12>`. Any new commit after an approval needs re-review.
 
 ### 2.4 Deployment / Operations Agent (`deploy-agent`)
 
 - **When to use:** Package/container upgrades, runtime config rollouts, database migrations, infrastructure provisioning, or live environment verification.
 - **How to use:** Dispatch with an approved plan. Always snapshot/backup pre-change state first, apply the minimum atomic change, execute smoke/soak checks, and keep rollback scripts verified. During a live rollout, run `scripts/overwatch_watch.sh` so QA is woken by real events (section 3).
 - **Strict boundaries:** Never deploy an unapproved plan or skip pre-change backups. Never rewrite application architecture mid-rollout; stop and roll back if stop-criteria trigger.
-- **Mandatory QA pairing:** **Two-stage ops audit.** Pre-deploy: `qa-agent` checks backup integrity, dry-run output, and rollback readiness. Post-deploy: `qa-agent` independently audits live health checks, logs, permissions, and secret hygiene.
+- **Mandatory QA pairing:** **Two-stage ops audit (logic & direction only).** Pre-deploy: `qa-agent` audits posted backup integrity, dry-run output, and rollback readiness. Post-deploy: `deploy-agent` runs live probes and posts health/log outputs; `qa-agent` audits those posted outputs and `overwatch_watch.sh` events (never logging into hosts or running probes itself), issuing `QA HOLD` to direct `deploy-agent` if any check is missing.
 
 ### 2.5 Mandatory QA / Overwatch Agent (`qa-agent`)
 
 - **When to use:** Across every active lane: planning, coding, and operations.
-- **How to use:** Point QA directly at the plan, branch/diff, test logs, or live read-only checks. QA writes its **own** binary verdict with `scripts/bus_append.sh --type "QA APPROVE" --ref auto` (or `"QA HOLD"`), citing commands, outputs, and `file:line` evidence.
-- **Strict boundaries:** **Zero-trust and read-only on deliverables.** Never edits source code, never patches configs to "help out", and never deploys. "Read-only" in a prompt is only a request: enforce it with the runtime's tool restrictions (see [agent-roles.md](./references/agent-roles.md)). If QA is denied a command, it says so and verifies from posted evidence; it never works around the denial.
+- **How to use:** `qa-agent` performs **logic, architecture, and direction review only**. Point QA at the plan, branch/diff (`git diff`, `git log`, `git rev-parse`), and posted test/deploy outputs; QA writes its **own** binary verdict with `scripts/bus_append.sh --type "QA APPROVE" --ref auto` (or `"QA HOLD"`), citing reviewed files (`file:line`) and verified posted outputs.
+- **Strict boundaries:** **Zero-trust, read-only, and never runs tests or probes.** Never edits source code, never patches configs, never deploys, and never runs test suites, linters, builds, Docker containers, or live probes itself — issue `QA HOLD` to direct `dev-agent` or `deploy-agent` whenever a check is needed. Enforce read-only with the runtime's tool restrictions (see [agent-roles.md](./references/agent-roles.md)). If QA is denied an inspection command, it says so and verifies from posted evidence; it never works around the denial.
 - **Cross-role pairing loop:** Audits `research-agent` plans pre-execution, `dev-agent` diffs and tests pre-merge, and `deploy-agent` backups/rollouts pre- and post-deploy, escalating blockers to the originating lane and Coordinator.
 
 ---

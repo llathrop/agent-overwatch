@@ -101,14 +101,14 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
 ### 2.5 Mandatory QA / Overwatch Agent (`qa-agent`)
 
 - **Core Duties:**
-  1. Independently re-read modified files/plans and run read-only verification (`git diff`, test commands, schema checks, read-only health/log probes).
+  1. Read modified files, plans, and local git diffs (`git diff`, `git log`, `git rev-parse`) to audit logic, architecture, edge cases, and the test/verification outputs posted by `dev-agent` and `deploy-agent`. Running test suites, linters, builds, Docker containers, or live probes is out of QA scope — if checks are missing or stale, issue `QA HOLD` directing the owning lane to run them and post output.
   2. Maintain zero-trust: never mark `APPROVE` from someone else's summary without observing the artifact or command output directly.
   3. Scan diffs, logs, and coordination artifacts for accidentally leaked secrets or credentials.
   4. Post its own verdict, bound to the exact commit, from the branch's checkout:
      ```bash
      scripts/bus_append.sh --from qa-1 --to coordinator,dev-1 --type "QA APPROVE" \
        --subject "parser error handling" --ref auto <<'EOF'
-     - Ran `pytest tests/parser` -> 31 passed
+     - Verified dev-1 posted `pytest tests/parser` output (31 passed on HEAD)
      - Checked src/parser.py:40-72 (empty input path handled)
      EOF
      ```
@@ -117,6 +117,7 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
   6. If a command is denied, say so in the verdict and verify from the evidence others posted. Never work around a permission denial.
 - **Anti-Patterns:**
   - Editing code, fixing typos, or restarting services directly (creates race conditions and hides systemic author/ops errors).
+  - Running test suites, linters, builds, Docker containers, or live host probes yourself instead of directing `dev-agent` or `deploy-agent` via `QA HOLD`.
   - Rubber-stamping an unrun test suite or partial diff.
   - Approving by message to the coordinator instead of a ref-bound bus entry.
 
@@ -154,7 +155,7 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
 
 A prompt that says "read-only" is enforced only by the model following it. Use the runtime's own controls as well:
 
-- **Tool lists:** give the QA and research agents a tool set with no edit, write or notebook-edit tools (read, search, and a verification shell only). Because a shell can still write, add entries to your runtime's permission allowlist for the specific read-only commands QA needs (for example `git diff`, `git log`, the test runner, or a remote read such as `ssh host systemctl status`), and leave everything else to prompt or deny. The adapter reference below shows the per-tool syntax.
+- **Tool lists:** give the QA and research agents a tool set with no edit, write or notebook-edit tools (read, search, and a minimal inspection shell only). Because a shell can still write, restrict your runtime's permission allowlist to local git inspection and bus verdict posting (`git diff`, `git log`, `git status`, `git rev-parse`, `bus_append.sh`), and leave everything else to prompt or deny. Running tests and live probes belongs to `dev-agent` and `deploy-agent`, not QA. The adapter reference below shows the per-tool syntax.
 - **Other controls:** sandbox or approval modes, per-agent tool lists, command allowlists.
 - **When QA is denied:** QA states which command was denied and verifies from the evidence that authors or deployers posted (command plus output, `file:line`). It never works around the denial with another tool or path.
 - **The coordinator** must not run denied commands on QA's behalf. If the evidence is not enough, ask the owning lane to post it, or ask the user to grant the permission.
@@ -185,4 +186,4 @@ This section is tool-specific and optional. The role logic in sections 1 to 4 ap
 
 ---
 
-**Claude Code QA permissions example:** the installer generates `tools: Read, Glob, Grep, Bash, WebSearch, WebFetch` for QA and research agents (no `Edit`, `MultiEdit`, `Write` or `NotebookEdit`). Allowlist read-only commands in `.claude/settings.json`, for example `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(pytest:*)`, or `Bash(ssh host systemctl status:*)`.
+**Claude Code QA permissions example:** the installer generates `tools: Read, Glob, Grep, Bash, WebSearch, WebFetch` for QA and research agents (no `Edit`, `MultiEdit`, `Write` or `NotebookEdit`). Allowlist only local git inspection and bus verdict posting in `.claude/settings.json`, for example `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(git status:*)`, `Bash(git rev-parse:*)`, and `Bash(*bus_append.sh:*)`.
