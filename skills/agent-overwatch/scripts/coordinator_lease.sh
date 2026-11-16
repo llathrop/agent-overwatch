@@ -52,8 +52,9 @@ Options:
   -h, --help   Show this help.
 
 Lease file keys: id, since, last_seen (UTC), ttl_min, last_seen_epoch.
-Environment: AO_LEASE_LOCK_WAIT seconds to wait for the lease lock (default 10;
-             applies to flock and the no-flock fallback). On timeout: exit 1.
+Environment: AO_LEASE_LOCK_WAIT seconds to wait for the lease lock (default 10,
+             max 3600; applies to flock and the no-flock fallback).
+             On timeout: exit 1.
 EOF
 }
 
@@ -235,8 +236,11 @@ do_release() {
 # else an exclusive-create lock file (<file>.excl.lock, bash noclobber = O_EXCL)
 # with a bounded wait and stale reaping. The mkdir command is not used: some
 # coreutils builds (e.g. uutils mkdir) are not atomic under races.
-LOCK_WAIT="${AO_LEASE_LOCK_WAIT:-10}"    # seconds to wait for the lock (flock or fallback)
-[[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || die_usage "AO_LEASE_LOCK_WAIT must be a non-negative integer (seconds)"
+LOCK_WAIT="${AO_LEASE_LOCK_WAIT:-10}"    # seconds to wait for the lock (0..3600)
+[[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || die_usage "AO_LEASE_LOCK_WAIT must be a non-negative integer <= 3600 (seconds)"
+LOCK_WAIT_TRIM="${LOCK_WAIT#"${LOCK_WAIT%%[!0]*}"}"
+LOCK_WAIT="${LOCK_WAIT_TRIM:-0}"
+(( ${#LOCK_WAIT} <= 4 && LOCK_WAIT <= 3600 )) || die_usage "AO_LEASE_LOCK_WAIT must be a non-negative integer <= 3600 (seconds)"
 LOCK_STALE=300                           # a lock older than this is stale even if its pid lives
 LOCK_F=""
 OWN_LOCK=false

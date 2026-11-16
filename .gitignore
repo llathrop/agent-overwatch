@@ -36,6 +36,8 @@ htmlcov/
 # Transient Agent Status Runtime Files
 status/*.tmp
 status/*.lock
+status/coordinator.lease
+status/.coordinator.lease.*
 
 # Language / Tooling Caches
 __pycache__/

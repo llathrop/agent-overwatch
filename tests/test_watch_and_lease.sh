@@ -207,6 +207,24 @@ check "id with '|' rejected (exit 2)" test "$rc" -eq 2
 bash "$LEASE" claim --id x --ttl -1 --file "$LF" >/dev/null 2>&1; rc=$?
 check "negative ttl rejected (exit 2)" test "$rc" -eq 2
 
+# AO_LEASE_LOCK_WAIT cap (max 3600) and overflow safety
+out="$(AO_LEASE_LOCK_WAIT=3601 bash "$LEASE" status --file "$L/status/none.lease" --id a 2>&1)"; rc=$?
+check "AO_LEASE_LOCK_WAIT=3601 rejected (exit 2)" test "$rc" -eq 2
+check "AO_LEASE_LOCK_WAIT=3601 message mentions non-negative integer" contains "$out" "must be a non-negative integer"
+
+start=$(date -u +%s)
+out="$(AO_LEASE_LOCK_WAIT=99999999999999999999 bash "$LEASE" status --file "$L/status/none.lease" --id a 2>&1)"; rc=$?
+elapsed=$(( $(date -u +%s) - start ))
+check "AO_LEASE_LOCK_WAIT overflow rejected (exit 2)" test "$rc" -eq 2
+check "AO_LEASE_LOCK_WAIT overflow message mentions non-negative integer" contains "$out" "must be a non-negative integer"
+check "AO_LEASE_LOCK_WAIT overflow fails immediately (${elapsed}s)" test "$elapsed" -le 2
+
+out="$(AO_LEASE_LOCK_WAIT=3600 bash "$LEASE" status --file "$L/status/none.lease" --id a 2>&1)"; rc=$?
+check "AO_LEASE_LOCK_WAIT=3600 accepted (status exit 4)" test "$rc" -eq 4
+
+out="$(AO_LEASE_LOCK_WAIT=0010 bash "$LEASE" status --file "$L/status/none.lease" --id a 2>&1)"; rc=$?
+check "AO_LEASE_LOCK_WAIT=0010 accepted (status exit 4)" test "$rc" -eq 4
+
 # ------------------------------------------------- lease: hardening (HOLD fixes)
 H="$TMP/hard"; mkdir -p "$H"; cd "$H" || exit 1
 HF="$H/status/coordinator.lease"
