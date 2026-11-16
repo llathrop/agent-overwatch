@@ -87,7 +87,7 @@ Use explicit artifacts to preserve shared state across turns, compactions, and s
 
 | Artifact | Purpose | Write Rule |
 | --- | --- | --- |
-| `HANDOFF.md` | Living current state: architecture, active branches, risks, ordered next steps | Coordinator/lead only; keep it short (≤200 chars per cell or bullet, ~150 lines). Detail goes to the bus |
+| `HANDOFF.md` | Living current state: architecture, active branches, risks, ordered next steps | Rides in work branch before QA (no circular handoff branches; ≤200 chars/item, ~150 lines; detail to bus) |
 | `AGENT_BUS.md` | Append-only log (`BRIEF`, `ACTION`, `RESULT`, `QA APPROVE`/`HOLD`, `TAKEOVER`, `USAGE`) | Read the tail first; append with `scripts/bus_append.sh` (it stamps the UTC time; never hand-type timestamps) |
 | `status/coordinator.lease` | Which session is the active coordinator | Only through `scripts/coordinator_lease.sh claim\|renew\|release\|status` |
 | `QA_BUS.md` *(optional)* | Optional separate local ledger when QA traffic is high (also untracked) | Same append rule; cross-reference from `AGENT_BUS.md` |
@@ -95,6 +95,7 @@ Use explicit artifacts to preserve shared state across turns, compactions, and s
 
 - **Coordinator lease and takeover:** Every session runs `coordinator_lease.sh status` before acting. To replace a stale coordinator, `claim --takeover` (this posts a `TAKEOVER` entry). A returning session that finds itself replaced stands down or coordinates on the bus; it does not resume acting.
 - **The bus is local, not committed:** `AGENT_BUS.md` is git-ignored (`init_workspace.sh` adds it to `.gitignore`). It is live coordination on one machine, not an audit trail in git and never pushed. With parallel worktrees, point every agent at the one shared copy with `--bus <path>`. `HANDOFF.md` is the tracked file; cross-machine handoff goes through it.
+- **No circular handoff branches:** `HANDOFF.md` updates ride inside the work branch before QA (no separate post-merge handoff branches; omit future `main` SHAs since `git log -1` shows `HEAD`; minor post-merge bookkeeping tweaks may remain uncommitted until the next real branch).
 - **Secret-scan false positives:** List allowed patterns in `.overwatch/secret-allowlist`. Report hits as `file:line` plus the pattern name, never the value.
 
 ### Built-In Tool Supersession (Mandatory)

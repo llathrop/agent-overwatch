@@ -50,6 +50,7 @@ Always prefer the host runtime's native coordination primitives over file pollin
 - Assign update ownership cleanly (usually the Coordinator or Lead) so parallel agents do not overwrite each other's `HANDOFF.md` edits.
 - **Size caps:** keep each table cell or bullet at 200 characters or fewer and the whole file around 150 lines. It is a current-state summary; history, evidence, and long explanations go to the bus, and `HANDOFF.md` points at them.
 - **Rate-limit pauses:** when a session pauses on a 429 or usage limit, it records running lanes, branch@SHA, pending verdicts, and the next step here so another session can resume.
+- **No circular handoff branches:** Update `HANDOFF.md` inside the work branch before QA review (or as the final step of a parallel batch), writing the entry as delivered or merge-pending without hardcoding `main`'s future merge SHA (`git log -1` provides `HEAD`). Never cut a separate branch just to record that a merge succeeded. Any minor post-merge bookkeeping edit to `HANDOFF.md` between a merge and the next real task may remain uncommitted until the next work branch, since no new functional work occurred and resuming agents do not need a commit solely to confirm the merge succeeded.
 
 ---
 
