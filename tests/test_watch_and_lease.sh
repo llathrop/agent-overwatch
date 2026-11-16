@@ -268,6 +268,39 @@ check "no-flock race: lock file released" test ! -e "$H/r1/coordinator.lease.exc
 if command -v flock >/dev/null 2>&1; then
   won="$(race "$H/r2/coordinator.lease" "$PATH")"
   check "flock race: exactly 1 of 20 claims wins (got $won)" test "$won" -eq 1
+
+  # A stuck holder of the flock must not hang claim/renew: bounded wait, exit 1.
+  FL="$H/f/coordinator.lease"; mkdir -p "$H/f"
+  hold_flock() { # $1 = file to lock; holds it in the background, prints the pid
+    ( exec 7>>"$1"; flock -x 7; exec sleep 30 ) >/dev/null 2>&1 &
+    echo $!
+  }
+  holder="$(hold_flock "$FL.lock")"; sleep 0.5
+  start=$(date -u +%s)
+  AO_LEASE_LOCK_WAIT=1 bash "$LEASE" claim --id stuck --file "$FL" >"$H/f/o" 2>&1; rc=$?
+  elapsed=$(( $(date -u +%s) - start ))
+  check "claim with a stuck flock holder exits 1" test "$rc" -eq 1
+  check "flock wait is bounded (${elapsed}s)" test "$elapsed" -le 4
+  check "flock timeout message is clear" grep -qF "timed out after 1s waiting for lock $FL.lock" "$H/f/o"
+  check "timed-out claim wrote no lease" test ! -e "$FL"
+  AO_LEASE_LOCK_WAIT=1 bash "$LEASE" renew --id stuck --file "$FL" >/dev/null 2>&1; rc=$?
+  check "renew with a stuck flock holder exits 1" test "$rc" -eq 1
+  kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+  bash "$LEASE" claim --id stuck --file "$FL" >/dev/null 2>&1; rc=$?
+  check "claim succeeds once the holder is gone" test "$rc" -eq 0
+
+  # Fallback TAKEOVER append (no bus_append.sh beside the script) is bounded too.
+  FB="$TMP/fb-only"; mkdir -p "$FB"; cp "$LEASE" "$FB/"
+  printf '# AGENT_BUS\n' > "$H/f/AGENT_BUS.md"
+  holder="$(hold_flock "$H/f/AGENT_BUS.md")"; sleep 0.5
+  start=$(date -u +%s)
+  AO_LEASE_LOCK_WAIT=1 bash "$FB/coordinator_lease.sh" claim --id taker --takeover \
+    --file "$FL" --bus "$H/f/AGENT_BUS.md" >"$H/f/o2" 2>&1; rc=$?
+  elapsed=$(( $(date -u +%s) - start ))
+  check "fallback TAKEOVER with a stuck bus lock exits 1" test "$rc" -eq 1
+  check "fallback TAKEOVER bus wait is bounded (${elapsed}s)" test "$elapsed" -le 4
+  check "fallback TAKEOVER timeout message is clear" grep -qF "timed out after 1s waiting for the lock on $H/f/AGENT_BUS.md" "$H/f/o2"
+  kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
 fi
 
 # Stale exclusive lock (dead owner pid) is reaped; a live one times out.
