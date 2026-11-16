@@ -1,11 +1,21 @@
 # SUBDIRECTORY HANDOFF: <SUBDIR_PATH> (Module Summary)
 
-**Parent Repository Root Handoff:** `[Root HANDOFF.md](../../HANDOFF.md)` *(adjust relative depth and remove backticks when instantiating)*  
+**Parent Repository Root Handoff:** [Root HANDOFF.md]({{PARENT_HANDOFF_PATH}}) *(`init_workspace.sh --subdir` fills in the relative path)*  
 **Last Updated:** `<YYYY-MM-DD HH:MM UTC>`  
 **Active Module Branch:** `<branch-name>`  
 **Module Status:** `<STATUS_BADGE>` (e.g., `GREEN` / `IN_PROGRESS` / `BLOCKED`)
 
 > **Notice:** This document is the localized handoff for the `<SUBDIR_PATH>` sub-package. It details local runtime boundaries, isolated test suites, and sub-workstreams. Global policies and repo-wide integration branch statuses are maintained in the root `HANDOFF.md`.
+
+> **Size caps:** keep each cell/bullet ≤ 200 chars; push detail to AGENT_BUS.md; whole file ≤ ~150 lines.
+
+---
+
+## Coordinator
+
+- **Lease:** the root `status/coordinator.lease` governs the whole repository; this module does not keep its own unless it runs an independent coordinator (then use `<SUBDIR_PATH>/status/coordinator.lease`).
+- **Check it before acting:** `coordinator_lease.sh status --file <lease-path>` (exit 0 = you hold it, 3 = another live session holds it, 4 = expired or none).
+- **Takeover rule:** take over a live lease only when its holder is known to be gone, with `coordinator_lease.sh claim --takeover`, which posts a `TAKEOVER` bus entry. On exit 3, stop and read the root `HANDOFF.md` and bus tail before acting.
 
 ---
 
@@ -44,7 +54,7 @@
 3. **QA Overwatch Review:**
    - Any pull request touching this subdirectory must be audited by the QA Overwatch agent against both local test suites and parent integration health.
 4. **Local Coordination Bus:**
-   - If this subdirectory operates with an independent sub-agent swarm and a local log is required (when no built-in messaging/board supersedes it), append entries atomically to `[AGENT_BUS.md](./AGENT_BUS.md)`. Otherwise, coordinate via the native tool or root coordination mechanism.
+   - If this subdirectory operates with an independent sub-agent swarm and a local log is required (when no built-in messaging/board supersedes it), append entries atomically to a local `AGENT_BUS.md` in this directory. Otherwise, coordinate via the native tool or root coordination mechanism.
 
 ---
 

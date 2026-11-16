@@ -6,6 +6,8 @@
 
 > **Purpose:** This file is the single source of truth for repository state, workstream status, and inter-agent handoffs. Any newly spawned agent (or human engineer) must read this file first to resume or coordinate work without context loss. Keep this document current on every significant state change or milestone.
 
+> **Size caps:** keep each cell/bullet ≤ 200 chars; push detail to AGENT_BUS.md; whole file ≤ ~150 lines.
+
 ---
 
 ## Repository & Architectural Overview
@@ -19,6 +21,16 @@
   - **NEVER** commit secrets, private keys, API tokens, passwords, or personally identifiable information (PII) to this file or any Git-tracked file.
   - Pass secrets strictly via environment variables, secret managers, or standard input streams.
   - Before committing or requesting QA sign-off, run the local secret-scan gate.
+
+---
+
+## Coordinator
+
+- **Lease file:** `status/coordinator.lease`, written only by `coordinator_lease.sh`. Never hand-edit it. Keys (key=value): `id`, `since`, `last_seen` (UTC, `YYYY-MM-DD HH:MM:SS UTC`), `ttl_min` and `last_seen_epoch`. A lease with only `id`/`since`/`last_seen` is read with ttl 30.
+- **Check it before acting:** `coordinator_lease.sh status` (exit 0 = you hold it, 3 = another live session holds it, 4 = expired or none).
+- **Hold it while coordinating:** `coordinator_lease.sh claim`, then `renew` at least every `ttl_min` minutes (set `AO_COORDINATOR_ID` for a stable id).
+- **Takeover rule:** take over a live lease only when its holder is known to be gone, with `coordinator_lease.sh claim --takeover`, which posts a `TAKEOVER` bus entry. A returning coordinator that finds exit 3 must stop, read this file and the bus tail, and post before touching `main`.
+- **Watcher:** `overwatch_watch.sh --once` (or looped under a monitor) prints `LEASE stale: ...` when the lease expires.
 
 ---
 
@@ -66,11 +78,11 @@
 
 When a sub-package, service, or module within this repository has its own localized build lifecycle, independent deploy targets, or dedicated sub-agent teams, maintain a nested `HANDOFF.md` inside that directory.
 
-| Subdirectory Path | Domain / Responsibility | Local Handoff Link *(replace backticks when instantiating)* | Scope & Boundary Summary |
+| Subdirectory Path | Domain / Responsibility | Local Handoff File *(make it a relative link once the file exists)* | Scope & Boundary Summary |
 |---|---|---|---|
-| `services/<service-a>/` | `<Backend API service>` | `[services/<service-a>/HANDOFF.md](./services/<service-a>/HANDOFF.md)` | Self-contained backend microservice; owns its own Dockerfile and database migrations. |
-| `frontend/` | `<Web application client>` | `[frontend/HANDOFF.md](./frontend/HANDOFF.md)` | Web SPA client; consumes mock API in local dev, backend in staging. |
-| `infra/terraform/` | `<Cloud infrastructure>` | `[infra/terraform/HANDOFF.md](./infra/terraform/HANDOFF.md)` | Terraform state & modules; restricted deploy rules apply. |
+| `services/<service-a>/` | `<Backend API service>` | `services/<service-a>/HANDOFF.md` | Self-contained backend microservice; owns its own Dockerfile and database migrations. |
+| `frontend/` | `<Web application client>` | `frontend/HANDOFF.md` | Web SPA client; consumes mock API in local dev, backend in staging. |
+| `infra/terraform/` | `<Cloud infrastructure>` | `infra/terraform/HANDOFF.md` | Terraform state & modules; restricted deploy rules apply. |
 
 *Guidelines for Subdirectory Handoffs:*
 - The root `HANDOFF.md` governs global repo status, integration branches, and cross-cutting rules.

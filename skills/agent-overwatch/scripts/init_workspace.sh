@@ -35,6 +35,11 @@ Options:
   --dry-run        Print planned actions safely without creating or modifying any files.
   -h, --help       Show this help message and exit.
 
+Creates (skipping existing files unless --force):
+  HANDOFF.md, AGENT_BUS.md (unless --no-bus), status/, .overwatch/secret-allowlist,
+  and .gitattributes union-merge lines for AGENT_BUS.md / QA_BUS.md (appended if
+  missing). status/coordinator.lease is NOT pre-created; use coordinator_lease.sh.
+
 Examples:
   init_workspace.sh
   init_workspace.sh ./my-new-project
@@ -129,6 +134,12 @@ get_fallback_handoff() {
   cat <<'EOF'
 # HANDOFF — {{PROJECT_NAME}}
 
+> **Size caps:** keep each cell/bullet ≤ 200 chars; push detail to AGENT_BUS.md; whole file ≤ ~150 lines.
+
+## Coordinator
+- **Lease file:** `status/coordinator.lease`; check with `coordinator_lease.sh status` (0 = mine, 3 = another live holder, 4 = expired/none).
+- **Takeover rule:** only `coordinator_lease.sh claim --takeover` (posts a TAKEOVER bus entry) when the holder is known to be gone.
+
 ## 1. Purpose & Architecture
 {{PROJECT_PURPOSE}}
 
@@ -160,6 +171,12 @@ get_fallback_subdir_handoff() {
 
 > **Parent Workspace:** [Parent HANDOFF]({{PARENT_HANDOFF_PATH}})
 > **Coordinator Action Required:** Ensure this child subproject is indexed in parent `HANDOFF.md` under Section 2 (Active Subprojects) and Section 3 (Roadmap)!
+>
+> **Size caps:** keep each cell/bullet ≤ 200 chars; push detail to AGENT_BUS.md; whole file ≤ ~150 lines.
+
+## Coordinator
+- **Lease:** the root `status/coordinator.lease` governs this subproject; check with `coordinator_lease.sh status --file <lease-path>`.
+- **Takeover rule:** only `coordinator_lease.sh claim --takeover` (posts a TAKEOVER bus entry) when the holder is known to be gone.
 
 ## 1. Subproject Purpose & Scope
 {{SUBDIR_PURPOSE}}
@@ -191,14 +208,14 @@ get_fallback_agent_bus() {
 
 > **Supersession Rule:** When your runtime provides a built-in message board or native agent-to-agent messaging tool (for example, Antigravity `swarm` `post_message` / `read_board`, `send_message`, or agent teams), use that native channel for live coordination. Use `AGENT_BUS.md` when no native board exists or when a Git-committed file-based audit trail is explicitly required.
 >
-> **Append-Only Discipline:** Read the tail before writing and **always append atomically** using a quoted heredoc (`cat <<'EOF' >> AGENT_BUS.md`) so parallel agents never clobber concurrent entries.
+> **Append-Only Discipline:** Read the tail before writing, then append with `scripts/bus_append.sh` (for example `echo '- body' | bus_append.sh --from dev-1 --to qa-1 --type RESULT --subject 'feat/x ready' --ref auto`). It stamps the UTC time, appends atomically and refuses bodies that match secret patterns. Only when that script is unavailable, fall back to a quoted heredoc (`cat <<'EOF' >> AGENT_BUS.md`), so parallel agents never clobber concurrent entries.
 >
 > **Secret Hygiene:** Never write tokens, passwords, private keys, API keys, PII, or credential strings into `AGENT_BUS.md` (or any committed file).
 
 ## Entry Format
 
 ```markdown
-### [YYYY-MM-DD HH:MM UTC] <from> -> <to> | <TYPE> <short subject>
+### [YYYY-MM-DD HH:MM:SS UTC] <from> -> <to> | <TYPE> <short subject>
 - Concise scope, file paths, verification output, or blocker.
 ```
 
@@ -391,6 +408,68 @@ representing its current task, progress, and verification status:
 > **Discipline Rule:** Each agent updates **only its own status file**. Never overwrite a peer agent's snapshot.
 STATUS_EOF
 write_file_safe "$TARGET_ABS/status/README.md" "$STATUS_README" "Status Directory README"
+
+# 4. .gitattributes: union merge for append-only buses, so parallel branches
+#    that each append to the committed bus do not conflict. Existing files keep
+#    their content; only missing lines are appended.
+GITATTR_FILE="$TARGET_ABS/.gitattributes"
+for attr_line in "AGENT_BUS.md merge=union" "QA_BUS.md merge=union"; do
+  if [[ -f "$GITATTR_FILE" ]] && grep -qxF "$attr_line" "$GITATTR_FILE"; then
+    echo "[SKIP] ${GITATTR_FILE} already has '${attr_line}'"
+  elif [[ "$DRY_RUN" == true ]]; then
+    echo "[DRY-RUN] Would add '${attr_line}' to ${GITATTR_FILE}"
+  else
+    # Ensure a trailing newline before appending to a pre-existing file.
+    if [[ -s "$GITATTR_FILE" && -n "$(tail -c 1 "$GITATTR_FILE")" ]]; then
+      printf '\n' >> "$GITATTR_FILE"
+    fi
+    printf '%s\n' "$attr_line" >> "$GITATTR_FILE"
+    echo "[OK] Added '${attr_line}' to ${GITATTR_FILE}"
+  fi
+done
+
+# 5. .overwatch/secret-allowlist for overwatch_watch.sh
+read -r -d '' ALLOWLIST_CONTENT <<'ALLOW_EOF' || true
+# Secret-scan allowlist for overwatch_watch.sh (one POSIX ERE per line).
+# Lines starting with '#' and blank lines are ignored.
+# Each pattern is tested against the matched text and, for key=value hits,
+# against the value alone. Anchor patterns so they stay narrow.
+# This file holds patterns only. Never paste a real secret here.
+#
+# Git commit SHAs (full or abbreviated):
+# ^[0-9a-f]{40}$
+# ^[0-9a-f]{7,12}$
+#
+# UUIDs:
+# ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+#
+# 32-hex account / tenant IDs that are not credentials:
+# ^[0-9a-f]{32}$
+ALLOW_EOF
+write_file_safe "$TARGET_ABS/.overwatch/secret-allowlist" "$ALLOWLIST_CONTENT" "Secret-scan allowlist (.overwatch/secret-allowlist)"
+
+# 6. Coordinator lease: never pre-create a placeholder that could look held.
+LEASE_SCRIPT="$SCRIPT_DIR/coordinator_lease.sh"
+if [[ "$DRY_RUN" == true ]]; then
+  echo "[DRY-RUN] Would report coordinator lease status (status/coordinator.lease is not pre-created)"
+elif [[ -f "$LEASE_SCRIPT" ]]; then
+  echo "[INFO] Coordinator lease status:"
+  # A subproject is governed by the root lease (see SUBDIR_HANDOFF.template.md).
+  LEASE_ROOT="$TARGET_ABS"
+  if [[ "$IS_SUBDIR" == true ]]; then
+    LEASE_ROOT="$(cd "$TARGET_ABS/$(dirname "$PARENT_HANDOFF_REL")" 2>/dev/null && pwd || echo "$TARGET_ABS")"
+  fi
+  LEASE_PATH="$LEASE_ROOT/status/coordinator.lease"
+  bash "$LEASE_SCRIPT" status --id "init_workspace" --file "$LEASE_PATH" 2>&1 | sed 's/^/         /' || true
+  echo "[HINT] Claim it with: $LEASE_SCRIPT claim --file $LEASE_PATH (set AO_COORDINATOR_ID for a stable id)"
+fi
+
+# 7. Hints for local runtime files
+echo "[HINT] Add '.overwatch/watch.state' (watcher offset state) to .gitignore; commit .overwatch/secret-allowlist."
+if git -C "$TARGET_ABS" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+   && git -C "$TARGET_ABS" check-ignore -q .overwatch/secret-allowlist 2>/dev/null; then
+  echo "[HINT] .overwatch/secret-allowlist is git-ignored (e.g. by a '*secret*' rule); add '!.overwatch/secret-allowlist' to .gitignore to share it."
+fi
 
 echo "================================================================="
 echo "[SUCCESS] Workspace initialization complete in ${TARGET_ABS}"
