@@ -20,8 +20,11 @@ mkdir -p "$REPO"
 (cd "$SRC_REPO" && tar --exclude=.git -cf - .) | (cd "$REPO" && tar -xf -)
 INSTALL="$REPO/install.sh"
 
-new_home() { local h; h="$(mktemp -d "$TMP/home.XXXX")"; echo "$h"; }
-run() { HOME="$H" "$INSTALL" "$@" >"$TMP/last.log" 2>&1; }
+new_home() { local h; h="$(mktemp -d "$TMP/home.XXXXXX")" || exit 1; [[ -d "$h" ]] || exit 1; echo "$h"; }
+run() {
+  [[ -n "${H:-}" && -d "$H" ]] || { echo "test HOME missing" >&2; return 1; }
+  HOME="$H" "$INSTALL" "$@" >"$TMP/last.log" 2>&1
+}
 empty_dir() { [[ -z "$(find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]]; }
 
 echo "# syntax and lint"
@@ -146,6 +149,55 @@ check "user CLAUDE.md content kept after uninstall" grep -q "Keep this line." "$
 check "block removed from CLAUDE.md" bash -c '! grep -q "agent-overwatch" "$1"' _ "$WS/CLAUDE.md"
 rm -f "$WS/CLAUDE.md"
 check "workspace is empty apart from the user file" empty_dir "$WS"
+
+echo "# tampered manifest: entries outside the target are never touched"
+plant() {
+  OUT="$TMP/outside-$1"; mkdir -p "$OUT/vdir"
+  echo victim > "$OUT/victim"; echo victim2 > "$OUT/victim2"; echo victim3 > "$OUT/victim3"
+  printf 'keep\n<!-- >>> agent-overwatch >>> -->\nx\n<!-- <<< agent-overwatch <<< -->\n' > "$OUT/notes.md"
+  cp "$OUT/notes.md" "$OUT/notes.orig"
+  ln -s "$OUT" "$WS/esc"
+  ln -s "$OUT/victim2" "$WS/lnk"
+  ln -s "$OUT/victim3" "$WS/flnk"
+  ln -s "$OUT/notes.md" "$WS/blk.md"
+  T="$(printf '\t')"
+  {
+    echo "claude${T}file${T}$OUT/victim"
+    echo "claude${T}file${T}/$OUT/victim"
+    echo "claude${T}file${T}../outside-$1/victim"
+    echo "claude${T}file${T}.claude/../../outside-$1/victim"
+    echo "claude${T}dir${T}../outside-$1/vdir"
+    echo "claude${T}file${T}esc/victim"
+    echo "claude${T}dir${T}esc/vdir"
+    echo "claude${T}link${T}lnk"
+    echo "claude${T}file${T}flnk"
+    echo "claude${T}block${T}blk.md"
+    echo "claude${T}file${T}./CLAUDE.md"
+    echo "bogus${T}file${T}x"
+  } >> "$WS/.agent-overwatch-manifest"
+}
+assert_outside_intact() {
+  check "$1: absolute/.. victim file survives" test -f "$OUT/victim"
+  check "$1: victim dir survives" test -d "$OUT/vdir"
+  check "$1: symlink target of a link entry survives" test -f "$OUT/victim2"
+  check "$1: symlink target of a file entry survives" test -f "$OUT/victim3"
+  check "$1: block file reached via symlink unchanged" cmp -s "$OUT/notes.md" "$OUT/notes.orig"
+}
+for mode in uninstall force; do
+  H="$(new_home)"; WS="$TMP/ws-tamper-$mode"; mkdir -p "$WS"
+  check "tamper/$mode: base install" run --claude --workspace "$WS"
+  plant "$mode"
+  if [[ "$mode" == uninstall ]]; then
+    check "tamper/$mode: uninstall runs" run --uninstall --workspace "$WS"
+  else
+    check "tamper/$mode: --force prune runs" run --claude --workspace "$WS" --force
+  fi
+  check "tamper/$mode: unsafe entries are reported" grep -q "Ignoring unsafe or malformed manifest entry" "$TMP/last.log"
+  assert_outside_intact "tamper/$mode"
+  check "tamper/$mode: escape symlink itself left alone" test -L "$WS/esc"
+done
+check "tamper/uninstall: in-root link entry removed without following it" test ! -L "$TMP/ws-tamper-uninstall/lnk"
+check "manifest stores relative paths only" bash -c '! cut -f3 "$1" | grep -q "^/"' _ "$TMP/ws-tamper-force/.agent-overwatch-manifest"
 
 echo "# global install: pointer snippet only"
 H="$(new_home)"

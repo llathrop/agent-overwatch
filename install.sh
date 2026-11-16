@@ -29,7 +29,8 @@ END_MARKER="<!-- <<< agent-overwatch <<< -->"
 LEGACY_START="# >>> AGENT-OVERWATCH START >>>"
 LEGACY_END="# <<< AGENT-OVERWATCH END <<<"
 
-declare -A WANT=()
+# Selected targets as a space-delimited list (bash 3.2 has no associative arrays).
+WANT=" "
 INSTALL_ALL=false
 IS_GLOBAL=false
 WORKSPACE_DIR=""
@@ -96,13 +97,16 @@ EOF
 
 die() { echo "[ERROR] $*" >&2; exit 1; }
 
+want() { case "$WANT" in *" $1 "*) ;; *) WANT="$WANT$1 " ;; esac; }
+is_selected() { case "$WANT" in *" $1 "*) return 0 ;; esac; return 1; }
+
 # -----------------------------------------------------------------------------
 # Argument parsing
 # -----------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) show_help; exit 0 ;;
-    --antigravity|--claude|--codex|--gemini|--cursor|--github) WANT["${1#--}"]=1; shift ;;
+    --antigravity|--claude|--codex|--gemini|--cursor|--github) want "${1#--}"; shift ;;
     --all) INSTALL_ALL=true; shift ;;
     --global) IS_GLOBAL=true; shift ;;
     --workspace)
@@ -296,22 +300,68 @@ MANIFEST="$ROOT/$MANIFEST_NAME"
 
 # Target selection
 if [[ "$INSTALL_ALL" == true ]]; then
-  WANT[antigravity]=1; WANT[claude]=1; WANT[codex]=1; WANT[gemini]=1
-  if [[ "$IS_GLOBAL" == false ]]; then WANT[cursor]=1; WANT[github]=1; fi
+  want antigravity; want claude; want codex; want gemini
+  if [[ "$IS_GLOBAL" == false ]]; then want cursor; want github; fi
 fi
 
 # -----------------------------------------------------------------------------
-# Manifest helpers.  Entry format: <target>\t<kind>\t<absolute path>
+# Manifest helpers.
+# On disk:   <target>\t<kind>\t<path relative to ROOT>
+# In memory: <target>\t<kind>\t<absolute path under ROOT>
 # kinds: file, link, dir, block (appended to an existing file), blockfile (file created for the block)
+#
+# The manifest is untrusted input. An entry is used only if its path is
+# relative, has no "." or ".." component, and resolves inside ROOT without any
+# symlinked directory on the way (the final component may be a symlink; it is
+# then only ever unlinked, never followed).
+#
+# Arrays are expanded as ${a[@]+"${a[@]}"} because bash < 4.4 treats an empty
+# "${a[@]}" as unbound under `set -u`.
 # -----------------------------------------------------------------------------
-declare -a OLD_ENTRIES=()
-declare -a NEW_ENTRIES=()
+OLD_ENTRIES=()
+NEW_ENTRIES=()
 TAB=$'\t'
 
+# inside_root ABS: ABS is ROOT or below it, and its nearest existing ancestor
+# directory (excluding ABS itself) is reached without symlinks.
+inside_root() {
+  local abs="$1" d
+  case "$abs" in "$ROOT"|"$ROOT"/*) ;; *) return 1 ;; esac
+  case "$abs/" in */../*|*/./*|*//*) return 1 ;; esac
+  [[ "$abs" == "$ROOT" ]] && return 0
+  d="$(dirname "$abs")"
+  while [[ ! -d "$d" ]]; do
+    [[ -e "$d" || -L "$d" ]] && return 1
+    d="$(dirname "$d")"
+  done
+  [[ "$(cd "$d" && pwd -P)" == "$d" ]] || return 1
+  case "$d" in "$ROOT"|"$ROOT"/*) return 0 ;; esac
+  return 1
+}
+
+valid_target() { case " ${ALL_TARGETS[*]} " in *" $1 "*) return 0 ;; esac; return 1; }
+
+if [[ -L "$MANIFEST" ]]; then
+  die "Manifest $MANIFEST is a symlink; refusing to use it."
+fi
 if [[ -f "$MANIFEST" ]]; then
+  lineno=0
   while IFS= read -r line || [[ -n "$line" ]]; do
+    lineno=$((lineno + 1))
     [[ -z "$line" || "$line" == \#* ]] && continue
-    OLD_ENTRIES+=("$line")
+    m_target="${line%%"$TAB"*}"; m_rest="${line#*"$TAB"}"
+    m_kind="${m_rest%%"$TAB"*}"; m_rel="${m_rest#*"$TAB"}"
+    m_ok=true
+    [[ "$m_rest" != "$line" && "$m_rel" != "$m_rest" ]] || m_ok=false
+    valid_target "$m_target" || m_ok=false
+    case "$m_kind" in file|link|dir|block|blockfile) ;; *) m_ok=false ;; esac
+    case "$m_rel" in ""|/*|*"$TAB"*) m_ok=false ;; esac
+    if [[ "$m_ok" == true ]] && ! inside_root "$ROOT/$m_rel"; then m_ok=false; fi
+    if [[ "$m_ok" != true ]]; then
+      echo "[WARN] Ignoring unsafe or malformed manifest entry at $MANIFEST line $lineno" >&2
+      continue
+    fi
+    OLD_ENTRIES+=("$m_target$TAB$m_kind$TAB$ROOT/$m_rel")
   done < "$MANIFEST"
 fi
 
@@ -321,7 +371,7 @@ entry_path()   { local r="${1#*"$TAB"}"; printf '%s' "${r#*"$TAB"}"; }
 
 record() {
   local e="$1$TAB$2$TAB$3" x
-  for x in "${NEW_ENTRIES[@]}"; do [[ "$x" == "$e" ]] && return 0; done
+  for x in ${NEW_ENTRIES[@]+"${NEW_ENTRIES[@]}"}; do [[ "$x" == "$e" ]] && return 0; done
   NEW_ENTRIES+=("$e")
 }
 
@@ -334,7 +384,7 @@ record_existing() {
 
 owned() {
   local p="$1" k="${2:-}" x
-  for x in "${OLD_ENTRIES[@]}" "${NEW_ENTRIES[@]}"; do
+  for x in ${OLD_ENTRIES[@]+"${OLD_ENTRIES[@]}"} ${NEW_ENTRIES[@]+"${NEW_ENTRIES[@]}"}; do
     [[ "$(entry_path "$x")" == "$p" ]] || continue
     [[ -z "$k" || "$(entry_kind "$x")" == "$k" ]] && return 0
   done
@@ -343,7 +393,7 @@ owned() {
 
 old_kind_for() {
   local t="$1" p="$2" x
-  for x in "${OLD_ENTRIES[@]}"; do
+  for x in ${OLD_ENTRIES[@]+"${OLD_ENTRIES[@]}"}; do
     if [[ "$(entry_target "$x")" == "$t" && "$(entry_path "$x")" == "$p" ]]; then
       entry_kind "$x"; return 0
     fi
@@ -360,17 +410,19 @@ parent_is_physical() {
   [[ "$(cd "$parent" && pwd -P)" == "$parent" ]]
 }
 
-write_manifest() {
-  local entries=("$@")
+write_manifest() {   # ENTRY...  (absolute in memory, written relative to ROOT)
+  local e
   [[ "$DRY_RUN" == true ]] && return 0
-  if [[ ${#entries[@]} -eq 0 ]]; then
+  if [[ $# -eq 0 ]]; then
     if [[ -f "$MANIFEST" ]]; then rm -f "$MANIFEST"; echo "[OK] Removed manifest: $MANIFEST"; fi
     return 0
   fi
   {
     echo "# agent-overwatch installer manifest. Do not edit. Used by install.sh --uninstall and --force."
-    echo "# source: $REPO_ROOT"
-    printf '%s\n' "${entries[@]}"
+    echo "# Paths are relative to the directory holding this file."
+    for e in "$@"; do
+      printf '%s\t%s\t%s\n' "$(entry_target "$e")" "$(entry_kind "$e")" "${e##*"$TAB$ROOT"/}"
+    done
   } > "$MANIFEST"
 }
 
@@ -436,7 +488,7 @@ ensure_dir() {
   while [[ "$d" != "$ROOT" && "$d" != "/" && "$d" == "$ROOT"/* ]]; do
     chain+=("$d"); d="$(dirname "$d")"
   done
-  for d in "${chain[@]}"; do
+  for d in ${chain[@]+"${chain[@]}"}; do
     if [[ ! -e "$d" && ! -L "$d" ]]; then
       [[ "$DRY_RUN" == true ]] || record "$t" dir "$d"
     elif owned "$d" dir; then
@@ -607,10 +659,17 @@ update_instruction_file() {   # TARGET FILE LABEL
 # Removal (shared by --uninstall and --force pruning)
 # -----------------------------------------------------------------------------
 remove_path() {   # KIND PATH
-  local kind="$1" p="$2"
-  if [[ "$kind" != dir ]] && [[ -e "$p" || -L "$p" ]] && ! parent_is_physical "$p"; then
-    echo "[KEEP] $p is reached through a symlink; not removing" >&2
+  local kind="$1" p="$2" real
+  if ! inside_root "$p" || [[ "$p" == "$ROOT" ]]; then
+    echo "[KEEP] $p is outside $ROOT or reached through a symlink; not removing" >&2
     return 0
+  fi
+  if [[ "$kind" == block || "$kind" == blockfile ]] && [[ -L "$p" ]]; then
+    real="$(abs_path "$p")"
+    case "$real" in
+      "$ROOT"/*) ;;
+      *) echo "[KEEP] $p links outside $ROOT; not editing it" >&2; return 0 ;;
+    esac
   fi
   case "$kind" in
     file)
@@ -639,16 +698,18 @@ remove_path() {   # KIND PATH
   esac
 }
 
-# remove_entries KEEP_ARRAY_NAME DROP_ARRAY_NAME: remove each dropped path that
-# no kept entry still references. Files first, then directories deepest first.
+# remove_entries: remove each path in REM_DROP that no entry in REM_KEEP still
+# references. Files first, then directories deepest first. (Globals instead of
+# namerefs, for bash 3.2.)
+REM_KEEP=()
+REM_DROP=()
 remove_entries() {
-  local -n _keep="$1" _drop="$2"
   local e p k x referenced
   local -a dirs=()
-  for e in "${_drop[@]}"; do
+  for e in ${REM_DROP[@]+"${REM_DROP[@]}"}; do
     p="$(entry_path "$e")"; k="$(entry_kind "$e")"
     referenced=false
-    for x in "${_keep[@]}"; do [[ "$(entry_path "$x")" == "$p" ]] && { referenced=true; break; }; done
+    for x in ${REM_KEEP[@]+"${REM_KEEP[@]}"}; do [[ "$(entry_path "$x")" == "$p" ]] && { referenced=true; break; }; done
     [[ "$referenced" == true ]] && continue
     if [[ "$k" == dir ]]; then dirs+=("$p"); else remove_path "$k" "$p"; fi
   done
@@ -661,11 +722,9 @@ remove_entries() {
 
 selected_targets() {
   local t
-  for t in "${ALL_TARGETS[@]}"; do [[ -n "${WANT[$t]:-}" ]] && echo "$t"; done
+  for t in "${ALL_TARGETS[@]}"; do is_selected "$t" && echo "$t"; done
   return 0
 }
-
-is_selected() { [[ -n "${WANT[$1]:-}" ]]; }
 
 # -----------------------------------------------------------------------------
 # Uninstall
@@ -676,15 +735,14 @@ if [[ "$ACTION" == "uninstall" ]]; then
     exit 0
   fi
   if [[ -z "$(selected_targets)" ]]; then
-    for e in "${OLD_ENTRIES[@]}"; do WANT["$(entry_target "$e")"]=1; done
+    for e in "${OLD_ENTRIES[@]}"; do want "$(entry_target "$e")"; done
   fi
   echo "Agent Overwatch uninstall from $ROOT: $(selected_targets | tr '\n' ' ')"
-  declare -a KEEP=() DROP=()
   for e in "${OLD_ENTRIES[@]}"; do
-    if is_selected "$(entry_target "$e")"; then DROP+=("$e"); else KEEP+=("$e"); fi
+    if is_selected "$(entry_target "$e")"; then REM_DROP+=("$e"); else REM_KEEP+=("$e"); fi
   done
-  remove_entries KEEP DROP
-  write_manifest "${KEEP[@]}"
+  remove_entries
+  write_manifest ${REM_KEEP[@]+"${REM_KEEP[@]}"}
   echo "[SUCCESS] Uninstall finished."
   exit 0
 fi
@@ -777,10 +835,11 @@ fi
 # Merge the manifest. Entries for targets outside this run are kept untouched.
 # Without --force, previous entries for this run's targets are kept as well.
 # With --force, previous entries this run did not re-record are pruned.
-declare -a FINAL=() STALE=()
-for e in "${OLD_ENTRIES[@]}"; do
+FINAL=()
+STALE=()
+for e in ${OLD_ENTRIES[@]+"${OLD_ENTRIES[@]}"}; do
   in_new=false
-  for x in "${NEW_ENTRIES[@]}"; do [[ "$x" == "$e" ]] && { in_new=true; break; }; done
+  for x in ${NEW_ENTRIES[@]+"${NEW_ENTRIES[@]}"}; do [[ "$x" == "$e" ]] && { in_new=true; break; }; done
   [[ "$in_new" == true ]] && continue
   if is_selected "$(entry_target "$e")" && [[ "$FORCE" == true ]]; then
     STALE+=("$e")
@@ -788,12 +847,14 @@ for e in "${OLD_ENTRIES[@]}"; do
     FINAL+=("$e")
   fi
 done
-FINAL+=("${NEW_ENTRIES[@]}")
+FINAL+=(${NEW_ENTRIES[@]+"${NEW_ENTRIES[@]}"})
 if [[ ${#STALE[@]} -gt 0 ]]; then
   echo ""; echo "--- Pruning stale files (--force) ---"
-  remove_entries FINAL STALE
+  REM_KEEP=(${FINAL[@]+"${FINAL[@]}"})
+  REM_DROP=("${STALE[@]}")
+  remove_entries
 fi
-write_manifest "${FINAL[@]}"
+write_manifest ${FINAL[@]+"${FINAL[@]}"}
 
 echo ""
 echo "================================================================="
