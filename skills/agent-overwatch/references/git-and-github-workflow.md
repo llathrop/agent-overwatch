@@ -43,6 +43,7 @@ Never build five unrelated milestones on one giant branch and try to review/merg
 - Every merge keeps `main` green and releasable.
 - QA diffs stay small (tens or hundreds of lines, not thousands), catching subtler defects faster.
 - Parallel branches rebase onto updated `main` cleanly with minimal conflict radius.
+- **No circular handoff branches:** `HANDOFF.md` is updated inside the feature branch prior to `QA APPROVE` (omitting future `main` merge SHAs; never cut a separate post-merge handoff branch). Any minor post-merge bookkeeping edit to `HANDOFF.md` between a merge and the next real task may stay uncommitted until the next work branch.
 
 ### 1.3 Verdict-Bound Merge Gate
 
