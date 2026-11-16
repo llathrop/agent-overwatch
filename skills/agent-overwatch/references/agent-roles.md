@@ -173,13 +173,13 @@ This section is tool-specific and optional. The role logic in sections 1 to 4 ap
 | `agents/deploy-agent.md` | Full read/edit/write/shell/task/web | `tools: [read_file, edit_file, write_file, run_command, manage_task, search_web]` | `tools: Read, Glob, Grep, Edit, MultiEdit, Write, Bash, WebSearch, WebFetch` | Inline role prompt in `AGENTS.md` / `.mdc` rules |
 
 **Installer Mapping Rules:**
-1. **Antigravity:** Installs `plugin.json`, `skills/`, and `agents/*.md` directly (no tool rewriting needed).
-2. **Claude Code:** Translates `tools:` entries using the mapping above, strips Antigravity-specific keys (`subagent`, `mainAgent`, `manage_task`), and optionally sets `model:` (`opus` / `sonnet` / `haiku`) unless uniform/fallback routing is selected.
-3. **Codex / Gemini CLI / Cursor:** Installs `skills/agent-overwatch/` into the tool's skills folder (or projects instructions into `AGENTS.md` / `GEMINI.md` / `.cursor/rules/`) and drops unsupported agent frontmatter.
+1. **Antigravity:** Installs `plugin.json`, `skills/`, and generated `dist/antigravity/agents/*.md`. Live `GetAllPlugins` checks and built-in `migrate-agent-settings/SKILL.md` confirmed that omitting `tools:` falls back to a 5-tool default lacking `run_command`, `edit_file`, `write_file`, and `manage_task`, while native YAML `tools:` lists grant those exact tools plus `send_message`. Generated Antigravity agents emit explicit `tools:` lists and drop `edit_file`/`write_file` from read-only roles (`qa-agent`, `research-agent`).
+2. **Claude Code:** Translates `tools:` entries using the mapping above, strips Antigravity-specific keys (`subagent`, `mainAgent`, `manage_task`), maps `manage_task` to `TodoWrite`, and strips write tools from `qa-agent` and `research-agent`.
+3. **Codex / Gemini CLI / Cursor:** Installs `skills/agent-overwatch/` into Codex's `.agents/skills/` (with standalone `.codex/agents/*.toml` role configs), Gemini commands + `GEMINI.md`, or `.cursor/rules/agent-overwatch.mdc`.
 
 **Install options** (from the repository root of https://github.com/llathrop/agent-overwatch):
-- `./install.sh` copies the skill and generated agent files into the chosen runtime's folders.
-- `./install.sh --link` symlinks the skill folder and generated agents instead, so `git pull` in the clone updates the install.
+- `./install.sh` copies the skill and generated agent files into the chosen runtime's folders (recommended for Antigravity, because Antigravity's customization scanner skips symlinks).
+- `./install.sh --link` symlinks the skill folder and generated agents instead for runtimes that follow symlinks (documented for Codex; **skipped by Antigravity**, and unverified for Claude Code skill dirs — prefer Claude's marketplace plugin install).
 - `./install.sh --uninstall` removes what the installer placed.
 - Claude Code can also install it as a native plugin: `/plugin marketplace add llathrop/agent-overwatch`, then install the `agent-overwatch` plugin from that marketplace (see the repository README for the exact names).
 

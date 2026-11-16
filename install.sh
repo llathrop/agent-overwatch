@@ -133,10 +133,12 @@ done
 # Claude Code: `tools:` is a comma-separated list of Claude tool names
 #   (https://code.claude.com/docs/en/sub-agents). Read-only roles (qa, research)
 #   never receive Edit/Write/NotebookEdit.
-# Antigravity: name/description/subagent/mainAgent. `tools:` is omitted because
-#   the documented built-in tool names are not settled and an unknown name can
-#   hang the subagent (https://antigravity.google/docs/subagents); omitted means
-#   "all tools", so read-only behaviour comes from the role prompt.
+# Antigravity: verified against GetAllPlugins + migrate-agent-settings/SKILL.md.
+#   Omitting `tools:` falls back to a 5-tool default (`send_message`, `view_file`,
+#   `search_web`, `schedule`, `generate_image`) lacking run_command, edit_file,
+#   write_file, and manage_task. Emitting native YAML `tools:` grants those exact
+#   tools plus `send_message`, enforcing read-only roles (qa, research) at the
+#   tool layer by excluding `edit_file` and `write_file`.
 # Codex: standalone TOML with name/description/developer_instructions
 #   (https://learn.chatgpt.com/docs/agent-configuration/subagents).
 render_agents() {
@@ -184,6 +186,7 @@ CLAUDE_MAP = {
     "manage_task": ["TodoWrite"],
 }
 WRITE_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
+ANTIGRAVITY_WRITE_TOOLS = {"edit_file", "write_file"}
 
 for role in roles:
     src = srcdir / f"{role}.md"
@@ -206,7 +209,20 @@ for role in roles:
         fm = ["---", f"name: {name}", f"description: {json.dumps(desc)}", "tools: " + ", ".join(mapped), "---"]
         out, ext = "\n".join(fm) + f"\n\n<!-- {note} -->\n\n" + body, ".md"
     elif platform == "antigravity":
-        fm = ["---", f"name: {name}", f"description: {json.dumps(desc)}", "subagent: true", "mainAgent: false", "---"]
+        ag_tools = []
+        for t in tools:
+            if t not in ag_tools and not (readonly and t in ANTIGRAVITY_WRITE_TOOLS):
+                ag_tools.append(t)
+        fm = [
+            "---",
+            f"name: {name}",
+            f"description: {json.dumps(desc)}",
+            "subagent: true",
+            "mainAgent: false",
+            "tools:",
+            *[f"  - {t}" for t in ag_tools],
+            "---",
+        ]
         out, ext = "\n".join(fm) + f"\n\n<!-- {note} -->\n\n" + body, ".md"
     elif platform == "codex":
         out = "\n".join([
@@ -776,6 +792,9 @@ fi
 
 if is_selected antigravity; then
   echo ""; echo "--- Antigravity ---"
+  if [[ "$MODE" == "link" ]]; then
+    echo "[NOTE] Antigravity's customization scanner skips symlinks; use copy mode (omit --link) for Antigravity installs."
+  fi
   if [[ "$IS_GLOBAL" == true ]]; then
     PLUGIN_DIR="$ROOT/.gemini/config/plugins/$SKILL_NAME"
     place_file antigravity "$REPO_ROOT/plugin.json" "$PLUGIN_DIR/plugin.json" "Antigravity plugin manifest"
