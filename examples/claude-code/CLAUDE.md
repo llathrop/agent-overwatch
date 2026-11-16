@@ -38,12 +38,12 @@ When dispatching subagents in Claude Code, route tasks according to model capabi
 
 | Subagent Role | Target Agent Config | Recommended Model Tier | Primary Responsibilities |
 |---|---|---|---|
-| **QA Overwatch** | `.claude/agents/qa-agent.md` | `sonnet` (or `opus` for high-risk audits) | Sips no Kool-Aid. Audits diffs, verifies test outputs, checks secrets, reviews rollback plans. Issues `APPROVE` or `HOLD`. |
+| **QA Overwatch** | `.claude/agents/qa-agent.md` | `sonnet` (or `opus` for high-risk audits) | Logic & direction only. Audits diffs, plans, rollback plans, secrets, and posted test/probe outputs; never runs tests or probes itself. Issues `APPROVE` or `HOLD`. |
 | **Developer** | `.claude/agents/dev-agent.md` | `sonnet` | Authors code, adds comprehensive unit/integration tests, updates docs, strictly within atomic feature branch. |
 | **Deployer** | `.claude/agents/deploy-agent.md` | `sonnet` | Pre-change backups, staging rollouts, live health checks (`/health` HTTP 200, zero container restarts). |
 | **Researcher** | `.claude/agents/research-agent.md` | `haiku` (fallback: `sonnet`) | Explores documentation, analyzes CVEs, summarizes external API specs without touching code. |
 
-**Enforce QA read-only with tools, not just the prompt:** keep the QA and research agents' `tools:` free of `Edit`, `MultiEdit`, and `Write`, and add permission allowlist entries in `.claude/settings.json` for the specific read-only commands QA needs (e.g. `Bash(git diff:*)`, `Bash(ssh host systemctl status:*)`). If QA is denied a command, it says so and verifies from posted evidence; the main session must not run the denied command for it.
+**Enforce QA read-only and logic/direction scope with tools, not just the prompt:** keep the QA and research agents' `tools:` free of `Edit`, `MultiEdit`, and `Write`, and restrict `.claude/settings.json` allowlists to local git inspection and bus verdict posting (e.g. `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(git status:*)`, `Bash(git rev-parse:*)`, `Bash(*bus_append.sh:*)`). QA never runs test suites, builds, containers, or live probes itself (it directs `dev-agent` or `deploy-agent` via `HOLD`); if denied a command, it says so and verifies from posted evidence.
 
 **Live overwatch:** subagents end their turns, so during a deploy run `scripts/overwatch_watch.sh --once --check '<health cmd>'` under the Monitor tool or `/loop`, and wake QA on each `BUS:`, `SECRET?`, or `CHECK-FAIL` line.
 

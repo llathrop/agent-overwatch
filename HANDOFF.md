@@ -24,6 +24,7 @@ A cross-platform multi-agent workflow skill: parallel lanes, independent QA, ato
 | #8–#11 | `0fbf4cd`, `caa77ea`, `b20e6f0`, `72da802` | Review-batch handoff (#8), tool-neutral core (#9), bus sync (#10), `AGENT_BUS.md` local/git-ignored (`HANDOFF.md` tracked, #11) |
 | #14 | `597ccb2` (`fix/lease-wait-cap@93a90c6e21e3`) | Capped `AO_LEASE_LOCK_WAIT` at `3600`s (overflow-safe) and ignored `status/coordinator.lease*` |
 | #15 | `0214911` (`feat/verify-antigravity-adapter@2713d30bff94`) | Verified Antigravity `tools:` in `install.sh` / `dist/antigravity/agents/*.md`, read-only QA/research tools, `--link` note & docs |
+| #16 | `docs/handoff-sync` (pending QA) | Synced HANDOFF through PR #15 and codified QA logic/direction-only boundary (QA reviews diffs & posted evidence; never runs tests/probes) |
 
 - QA HOLDs caught before merge: bash 3.2 breakage (×3), lock races without flock, manifest paths escaping target, spoofed verdict headers, stale locks, omitted Antigravity `tools:`.
 - Environment notes: this host's `mkdir` is uutils 0.10.0 (not atomic under races); BusyBox `flock` lacks `-w`.
@@ -44,5 +45,5 @@ A cross-platform multi-agent workflow skill: parallel lanes, independent QA, ato
 ## 6. Repo Conventions
 
 - Never commit secrets; `bus_append.sh` refuses them, and the verifier scans branch history.
-- One short-lived branch per lane; QA posts `QA APPROVE <branch>@<sha12>` itself; `verify_atomic_branch.sh` must pass before merge; PR cites the verdict.
+- One short-lived branch per lane; QA is logic/direction-only (never runs tests/probes; directs dev/deploy via `QA HOLD`) and posts `QA APPROVE <branch>@<sha12>`; PR cites it.
 - Coordinator: check `coordinator_lease.sh status` before acting; take over only with `--takeover`.
