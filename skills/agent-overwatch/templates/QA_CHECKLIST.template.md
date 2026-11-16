@@ -4,6 +4,7 @@
 **Auditor (QA Agent ID):** `<qa-agent-id>`  
 **Target Pull Request / Branch:** `PR #<N>` (`<branch-name>` -> `<target-branch>`)  
 **Workstream ID:** `<WS-ID>`  
+**Reviewed Commit:** `<branch-name>@<sha12>` (the exact HEAD you tested; any later commit needs a new review)  
 **Overall Decision:** `[ APPROVE | HOLD ]`
 
 ---
@@ -37,6 +38,7 @@
   - [ ] Exact test commands and stdout/stderr evidence provided.
 - [ ] **Secret & Security Scan:**
   - [ ] `git diff` audited for API keys, bearer tokens, private keys, database passwords, or hardcoded IP/host secrets.
+  - [ ] `verify_atomic_branch.sh --repo . --base <target>` secret scan clean: it checks the final files AND the lines added by every commit in `merge-base..HEAD`, so a credential added and later deleted still fails (rewrite history and rotate the credential).
   - [ ] Credentials strictly sourced via environment variables, secret managers, or stdin.
   - [ ] File permissions audited (e.g., sensitive files set to `600` or `700`, not world-readable).
 - [ ] **Code Hygiene & Standards:**
@@ -71,8 +73,38 @@
 
 ## 5. QA Overwatch Verdict
 
+### Evidence (required for every verdict)
+List every command you ran yourself against `<branch-name>@<sha12>` and what it returned. Do not restate the author's claims as evidence.
+
+| # | Command | Exit code | Result (counts / key lines) |
+|---|---------|-----------|-----------------------------|
+| 1 | `<e.g. tests/test_foo.sh>` | `0` | `<passed: N failed: 0>` |
+| 2 | `<e.g. shellcheck scripts/*.sh>` | `0` | `<no findings>` |
+| 3 | `verify_atomic_branch.sh --repo . --base <target> --qa-file <ledger>` | `<0/1>` | `<gate summary>` |
+
 ### Evaluation Summary
-`<Detailed rationale explaining why the workstream passes or fails the audit criteria. Highlight any specific test results, code snippets, or verification evidence.>`
+`<Rationale for the decision, tied to the evidence rows above. For HOLD, list numbered remediation items.>`
+
+### Posting the Verdict (QA writes it; the coordinator never relays it)
+QA appends its own verdict to the ledger with `bus_append.sh`. The header is bound to the exact branch and commit, and the author role must contain `qa`:
+
+```bash
+./skills/agent-overwatch/scripts/bus_append.sh --bus AGENT_BUS.md --repo <worktree> \
+  --from <qa-role> --to <dev-role>,coordinator --type "QA APPROVE" \
+  --subject "<short reason>" --ref auto <<'EOF'
+Evidence:
+1. `<command>` -> exit 0, <result>
+2. `<command>` -> exit 0, <result>
+EOF
+```
+
+This writes:
+
+```text
+### [YYYY-MM-DD HH:MM:SS UTC] <qa-role> -> <to> | QA APPROVE <branch>@<sha12> <subject>
+```
+
+Use `--type "QA HOLD"` to block. `verify_atomic_branch.sh` takes the **latest** verdict for the current branch: a HOLD blocks, and an APPROVE passes only if its sha matches HEAD (prefix >= 7). New commits after an APPROVE require a fresh review and a new verdict.
 
 ### Decision Block
 
@@ -80,10 +112,11 @@
 ======================================================================
 QA VERDICT: [ APPROVE | HOLD ]
 ======================================================================
-Branch / PR: <branch-name> (PR #<N>)
+Branch@SHA:  <branch-name>@<sha12> (PR #<N>)
 Status:      <APPROVED FOR MERGE / ROLLOUT | BLOCKED PENDING RESOLUTION>
-Auditor:     <qa-agent-id>
-Timestamp:   <YYYY-MM-DD HH:MM:SS UTC>
+Auditor:     <qa-role>
+Timestamp:   <stamped by bus_append.sh>
+Bus entry:   <header line printed by bus_append.sh>
 
 Action Items (if HOLD):
 1. <Remediation item 1>
