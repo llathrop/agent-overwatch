@@ -137,6 +137,9 @@ done
 check "existing CLAUDE.md content kept" grep -q "Keep this line." "$WS/CLAUDE.md"
 check "workspace block has the conditional branch rule" grep -q "In git repos with a shared" "$WS/CLAUDE.md"
 check "workspace block has no unconditional main rule" bash -c '! grep -q "Never commit directly" "$1"' _ "$WS/CLAUDE.md"
+for wf in CLAUDE.md AGENTS.md GEMINI.md; do
+  check "workspace $wf authorizes model tiering" grep -q "explicitly user-authorized" "$WS/$wf"
+done
 check "installed skill's ../../agents link resolves for Claude" test -f "$WS/.claude/skills/agent-overwatch/../../agents/qa-agent.md"
 check "re-run without --force is idempotent" run --all --workspace "$WS"
 check "re-run keeps a single block" test "$(grep -c '>>> agent-overwatch >>>' "$WS/CLAUDE.md")" = 1
@@ -224,6 +227,7 @@ for f in .claude/CLAUDE.md .codex/AGENTS.md .gemini/GEMINI.md; do
   check "$f has the skill pointer" grep -q 'load the `agent-overwatch` skill' "$H/$f"
   check "$f has no hard rules" bash -c '! grep -qiE "never commit|QA gate:|Branches:|Secret hygiene" "$1"' _ "$H/$f"
   check "$f block is short (<= 8 lines)" test "$(wc -l < "$H/$f")" -le 8
+  check "$f authorizes model tiering" grep -q "explicitly user-authorized" "$H/$f"
 done
 check "global Antigravity plugin manifest" test -f "$H/.gemini/config/plugins/agent-overwatch/plugin.json"
 check "global Codex skill under ~/.agents/skills" test -f "$H/.agents/skills/agent-overwatch/SKILL.md"

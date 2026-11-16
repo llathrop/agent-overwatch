@@ -183,7 +183,8 @@ In Antigravity:
 
 ## 5. Model Routing & Graceful Fallback
 
-When an Antigravity workflow (such as explicit user-requested swarm model selection) permits per-worker model routing:
-- **Economy / Fast (`flash`):** Lightweight lookups, formatting, and quick file inventories.
-- **Standard / Reasoning (`pro`, `opus`, `sonnet`):** Implementation, deployment verification, and **mandatory QA Overwatch** (`qa-agent`).
-- **Mandatory Fallback Rule:** By default, Antigravity subagents and inherit-mode swarm workers run on the parent conversation's active model (`inherit`). If tiered selection is disallowed or quota-limited, drop differing-cost routing and run all agents on the default/inherited model.
+Antigravity selects models per invocation rather than in `agents/*.md` frontmatter. Its `invoke_subagent` `Model` parameter supports `flash_lite`, `flash`, `pro`, and `inherit`:
+- **`flash_lite` / `flash` (Economy / Fast):** Mechanical file/inventory checks, status formatting, boilerplate scaffolding, and lightweight lookups.
+- **`flash` / `pro` (Standard):** Routine `dev-agent` feature slices, tests, documentation, and standard `deploy-agent` runbooks.
+- **`pro` (Frontier / Reasoning):** Complex `research-agent` architecture, subtle debugging, and **mandatory `qa-agent` overwatch**.
+- **Explicit Authorization & Graceful Fallback:** Activating `agent-overwatch` via the installed Antigravity plugin or instruction pointer constitutes explicit user authorization for per-subagent `invoke_subagent` `Model` tiering. Fall back gracefully to `inherit` if tiered selection is disallowed by runtime/swarm policy or quota-limited.

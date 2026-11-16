@@ -471,8 +471,9 @@ global_snippet() {
 $START_MARKER
 ## Agent Overwatch (pointer)
 When a task is multi-agent (parallel workers, subagents, or an independent QA
-gate), load the \`agent-overwatch\` skill and follow it. This note adds no rules
-to single-agent work.
+gate), load the \`agent-overwatch\` skill and follow it. Per-subagent model
+tiering (\`flash_lite\`, \`flash\`, \`pro\` / economy, standard, frontier) is
+explicitly user-authorized. This note adds no rules to single-agent work.
 $END_MARKER
 EOF
 }
@@ -487,6 +488,7 @@ For multi-agent work in this workspace, load the \`agent-overwatch\` skill and f
 - **Branches:** In git repos with a shared \`main\`/\`master\`, work on short-lived branches (\`feat/*\`, \`fix/*\`, \`docs/*\`) and merge only after QA approval.
 - **Coordination:** Keep living state in \`HANDOFF.md\` and the append-only log in \`AGENT_BUS.md\`, unless the runtime has a native board.
 - **User updates:** Report each finished batch to the user in self-contained terms (what changed, tradeoffs, QA findings, test results, what runs next).
+- **Model tiering:** Per-subagent model routing (\`flash_lite\`, \`flash\`, \`pro\` / economy, standard, frontier) is explicitly user-authorized (with graceful fallback to \`inherit\`).
 - **Secret hygiene:** Never commit tokens, credentials, passwords, or private keys.
 $END_MARKER
 EOF
