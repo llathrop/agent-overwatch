@@ -106,7 +106,8 @@ if [[ "$type_ok" != true ]]; then
 fi
 
 if [[ "$TYPE" == QA\ * ]]; then
-  [[ "${FROM,,}" == *qa* ]] || die "'$TYPE' must be written by a QA role (--from must contain 'qa'); QA writes its own verdicts."
+  from_lc="$(printf '%s' "$FROM" | tr '[:upper:]' '[:lower:]')"  # bash 3.2-safe lowercase
+  [[ "$from_lc" == *qa* ]] || die "'$TYPE' must be written by a QA role (--from must contain 'qa'); QA writes its own verdicts."
   [[ -n "$REF" ]] || die "'$TYPE' requires --ref auto|BRANCH@SHA"
 fi
 

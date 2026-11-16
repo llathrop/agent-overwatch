@@ -348,6 +348,9 @@ echo "[QA] Checking for a QA verdict bound to '${CURRENT_BRANCH}' at HEAD..."
 
 HEAD_SHA="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "")"
 
+# bash 3.2-safe lowercase (no ${var,,})
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
 qa_missing() {
   # $1 = reason. FAIL unless --allow-external-qa was given explicitly.
   if [[ "$ALLOW_EXTERNAL_QA" == true ]]; then
@@ -404,13 +407,14 @@ else
       vbranch="${BASH_REMATCH[3]}"
       vsha="${BASH_REMATCH[4]}"
       [[ "$vbranch" == "$CURRENT_BRANCH" ]] || continue
-      if [[ "${author,,}" != *qa* ]]; then
+      author_lc="$(lower "$author")"
+      if [[ "$author_lc" != *qa* ]]; then
         IGNORED_NON_QA=$((IGNORED_NON_QA + 1))
         echo "[WARN] Ignoring ${QA_BASENAME}:${lineno}: verdict author '${author}' is not a QA role (must contain 'qa')."
         continue
       fi
       LAST_KIND="$kind"
-      LAST_SHA="${vsha,,}"
+      LAST_SHA="$(lower "$vsha")"
       LAST_LINE="$lineno"
       LAST_AUTHOR="$author"
     elif [[ "$line" =~ $LEGACY_RE ]]; then
