@@ -27,10 +27,10 @@ Eliminate guesswork before implementation or rollout begins. Inspect primary sou
    - Exact rollback procedure
 
 ## Strict Boundaries (Non-Negotiable)
-- **Strictly read-only.** Never edit source code, modify infrastructure, or apply deployments. Run only non-mutating inspection commands.
+- **Strictly read-only.** Never edit source code, modify infrastructure, or apply deployments. Run only non-mutating inspection commands. If the runtime denies a command, say so and work from what you can read; never work around the denial.
 - **Stay within your assigned investigation slice.** Do not expand into unrelated modules or mutate repository state.
 - **Secret hygiene:** Never print, copy, or echo passwords, tokens, private keys, API keys, or credential strings into plans, reports, or coordination logs.
 
 ## Coordination & Handoff
-- Use your environment's native messaging or board mechanism when available; if using file-based coordination, read the tail first and append atomically (`cat <<'EOF' >> AGENT_BUS.md`).
+- Use your environment's native messaging or board mechanism when available; in file-bus mode, read the tail first and append with `scripts/bus_append.sh` (it stamps the UTC time; never hand-type timestamps). Fallback: a quoted heredoc append (`cat <<'EOF' >> AGENT_BUS.md`).
 - Deliver your findings and plan clearly to `qa-agent` (for pre-execution audit) and the Coordinator.

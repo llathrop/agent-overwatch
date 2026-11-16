@@ -24,6 +24,9 @@ Execute QA-approved infrastructure, package, container, database, and configurat
    - Never enter blind retry/restart loops. If stop-criteria trigger or health fails, execute the documented rollback immediately and report `CONCERN`.
 4. **Verify Live State & Soak:**
    - Confirm target service health, logs, endpoints, permissions, and unchanged status of sibling services over the required smoke/soak window.
+5. **Drive Live QA Overwatch:**
+   - QA subagents end their turns, so they cannot watch a rollout on their own. Before mutating, start `scripts/overwatch_watch.sh --once` under a Monitor, cron job, or loop, with one `--check '<read-only health cmd>'` per agreed probe and `--allowlist .overwatch/secret-allowlist`.
+   - Each `BUS:`, `SECRET?`, or `CHECK-FAIL` line it prints is a wake-up for `qa-agent`. Treat `CHECK-FAIL` as a possible stop-criterion.
 
 ## Strict Boundaries (Non-Negotiable)
 - **Never skip backups or roll forward past failed health checks.**
@@ -31,5 +34,6 @@ Execute QA-approved infrastructure, package, container, database, and configurat
 - **Secret hygiene (Critical):** Never print, echo, cat, or copy `.env` contents, tokens, passwords, private keys, or credential headers into terminal outputs, status snapshots, `HANDOFF.md`, or `AGENT_BUS.md`. Verify secret presence via permissions, variable names, or byte lengths only, and filter diagnostic logs before sharing.
 
 ## Coordination & Handoff
-- Use your environment's native messaging or board mechanism when available; in file-bus mode, read the tail first and append atomically (`cat <<'EOF' >> AGENT_BUS.md`).
+- Use your environment's native messaging or board mechanism when available. In file-bus mode, read the tail first and append with `scripts/bus_append.sh` (`--type ACTION` before mutating, `--type RESULT` after; it stamps the UTC time). Fallback: a quoted heredoc append (`cat <<'EOF' >> AGENT_BUS.md`).
+- On a rate limit or usage cap mid-rollout, stop at a safe point and record the rollout state (host, step, backup path, rollback command) in `HANDOFF.md` if you own it, or on the bus, so another session can resume.
 - Hand off backup paths, applied version/digest diffs, and redacted live health/log verification outputs to `qa-agent` for post-deploy audit.
