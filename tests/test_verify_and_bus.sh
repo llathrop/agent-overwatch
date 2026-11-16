@@ -217,7 +217,7 @@ if [[ $RC -eq 1 && "$ERR" == *"does not exist"* ]]; then ok "missing bus file re
 ERR="$("$BUSAPP" --bus 2>&1)"; RC=$?
 if [[ $RC -eq 1 && "$ERR" == *"requires a value"* ]]; then ok "bus_append missing option value rejected"; else nok "bus_append missing option value rejected" "$ERR"; fi
 
-# 11. Concurrent appends do not interleave (flock and mkdir-lock fallback)
+# 11. Concurrent appends do not interleave (flock and O_EXCL lockfile fallback)
 check_concurrent() { # LABEL ENVPREFIX
   local label="$1" cbus="$WORK/cbus-$1.md" i
   printf '# concurrent\n' > "$cbus"
@@ -239,7 +239,7 @@ check_concurrent() { # LABEL ENVPREFIX
   if [[ "$headers" -eq 20 && "$bad" -eq 0 ]]; then ok "20 parallel appends, no interleaving ($label)"; else nok "20 parallel appends, no interleaving ($label)" "headers=$headers bad=$bad"; fi
 }
 check_concurrent flock BUS_APPEND_NO_FLOCK=0
-check_concurrent mkdir BUS_APPEND_NO_FLOCK=1
+check_concurrent lockfile BUS_APPEND_NO_FLOCK=1
 
 echo "-----------------------------------------------------------------"
 echo "passed: $PASS  failed: $FAIL"

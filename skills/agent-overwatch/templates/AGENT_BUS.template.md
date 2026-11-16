@@ -9,7 +9,7 @@
 
 1. **STRICTLY APPEND-ONLY, VIA `bus_append.sh`:**
    - Never edit, overwrite, reorder, or delete existing entries. All agents append new entries at the bottom of the log.
-   - Append with `skills/agent-overwatch/scripts/bus_append.sh`, never by hand-typing headers. It stamps the UTC time (with seconds) automatically, resolves `--ref auto` to `<branch>@<sha12>`, appends atomically (flock, or a mkdir lock), validates the entry type, and refuses (exit 2) any subject/body that matches a secret pattern (reporting the line number only):
+   - Append with `skills/agent-overwatch/scripts/bus_append.sh`, never by hand-typing headers. It stamps the UTC time (with seconds) automatically, resolves `--ref auto` to `<branch>@<sha12>`, appends atomically (flock, or an O_EXCL lockfile), validates the entry type, and refuses (exit 2) any subject/body that matches a secret pattern (reporting the line number only):
      ```bash
      ./skills/agent-overwatch/scripts/bus_append.sh --bus AGENT_BUS.md \
        --from dev-1 --to qa-1,coordinator --type RESULT \
@@ -18,6 +18,15 @@
      Tests: tests/test_foo.sh -> passed: 12 failed: 0
      EOF
      ```
+   - **Fallback only** (when `bus_append.sh` is unavailable, e.g. a project without the skill scripts): append one complete entry with a single quoted heredoc so nothing in it is expanded, and take the timestamp from `date -u '+%Y-%m-%d %H:%M:%S UTC'` rather than typing it:
+     ```bash
+     cat <<'EOF' >> AGENT_BUS.md
+
+     ### [<output of date -u '+%Y-%m-%d %H:%M:%S UTC'>] dev-1 -> qa-1 | RESULT fix/topic@<sha12> fix/topic ready for QA
+     <body>
+     EOF
+     ```
+     This path has no locking and no secret check, so prefer `bus_append.sh` whenever it exists. QA verdicts should always go through `bus_append.sh`.
 2. **Standard Entry Format** (what `bus_append.sh` writes):
    ```markdown
    ### [<YYYY-MM-DD HH:MM:SS UTC>] <from> -> <to-list|all> | <TYPE> [<branch>@<sha12>] <subject>

@@ -25,7 +25,7 @@ Usage:
   bus_append.sh --from ROLE --to LIST --type TYPE --subject TEXT \
                 [--ref auto|BRANCH@SHA] [--bus PATH] [--repo DIR] < body.txt
 
-Writes, atomically (flock when available, mkdir-lock otherwise):
+Writes, atomically (flock when available, else an O_EXCL <bus>.lock file):
 
   ### [YYYY-MM-DD HH:MM:SS UTC] <from> -> <to> | <TYPE> [<branch>@<sha>] <subject>
   <body read from stdin; may be empty>
@@ -147,10 +147,10 @@ PW_REGEX='(PASSWORD|PASSWD|SECRET_KEY|API_SECRET)[[:space:]]*[:=][[:space:]]*["'
 PW_PLACEHOLDER='(\{\{|\}\}|<.*>|TODO|CHANGEME|example|placeholder|dummy|sample|your_|default|none|null|false|true)'
 
 TMP="$(mktemp -d)"
-LOCK_DIR=""
+LOCK_FILE=""
 cleanup() {
   rm -rf "$TMP"
-  if [[ -n "$LOCK_DIR" ]]; then rmdir "$LOCK_DIR" 2>/dev/null || true; fi
+  if [[ -n "$LOCK_FILE" ]]; then rm -f "$LOCK_FILE"; fi
 }
 trap cleanup EXIT
 
@@ -198,22 +198,24 @@ write_entry() {
 
 HEADER_WRITTEN=""
 exec 9>>"$BUS"
-# BUS_APPEND_NO_FLOCK=1 forces the mkdir-lock fallback (used by tests)
+# BUS_APPEND_NO_FLOCK=1 forces the lockfile fallback (used by tests)
 if [[ "${BUS_APPEND_NO_FLOCK:-0}" != 1 ]] && command -v flock >/dev/null 2>&1; then
   flock -x -w 30 9 || die "Timed out waiting for lock on $BUS"
   write_entry
 else
-  lock="${BUS}.lock.d"
+  # O_EXCL lockfile (bash noclobber). mkdir-based locks were observed to admit
+  # several holders at once in some sandboxed environments; O_EXCL create did not.
+  lock="${BUS}.lock"
   tries=0
-  until mkdir "$lock" 2>/dev/null; do
+  until ( set -o noclobber; printf '%s\n' "$$" > "$lock" ) 2>/dev/null; do
     tries=$((tries + 1))
     [[ "$tries" -lt 300 ]] || die "Timed out waiting for lock $lock (remove it if stale)"
     sleep 0.1
   done
-  LOCK_DIR="$lock"
+  LOCK_FILE="$lock"
   write_entry
-  rmdir "$LOCK_DIR" 2>/dev/null || true
-  LOCK_DIR=""
+  rm -f "$LOCK_FILE"
+  LOCK_FILE=""
 fi
 exec 9>&-
 
