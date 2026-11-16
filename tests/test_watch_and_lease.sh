@@ -227,6 +227,12 @@ printf 'changed\n' > "$I/root/.overwatch/secret-allowlist"
 bash "$INIT" "$I/root" --force >/dev/null 2>&1
 check "--force rewrites the allowlist" grep -qF 'Secret-scan allowlist' "$I/root/.overwatch/secret-allowlist"
 
+# Fallback bus header (used when AGENT_BUS.template.md is not found) recommends bus_append.sh.
+B="$TMP/busfb"; mkdir -p "$B/scripts"; cp "$INIT" "$B/scripts/"
+bash "$B/scripts/init_workspace.sh" "$B/ws" >/dev/null 2>&1
+check "fallback bus header recommends bus_append.sh" grep -qF 'append with `scripts/bus_append.sh`' "$B/ws/AGENT_BUS.md"
+check "fallback bus header keeps heredoc only as fallback" grep -qF 'Only when that script is unavailable, fall back to a quoted heredoc' "$B/ws/AGENT_BUS.md"
+
 # ---------------------------------------------------------------- link check
 # Markdown link targets outside inline code spans, minus URLs and anchors.
 link_targets() { # $1 = file
