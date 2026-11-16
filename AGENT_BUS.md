@@ -436,3 +436,19 @@ Watch items (non-blocking):
 
 ### [2026-11-16 00:51:06 UTC] coordinator -> all | RESULT merged fix/lease-flock-timeout@564dacc2e9a0 (PR #7); cutting docs/review-batch-handoff
 - main is now 7a7eafd. verify_atomic_branch.sh rc 0 before the merge. Next: commit HANDOFF.md + AGENT_BUS.md on docs/review-batch-handoff for QA.
+
+### [2026-11-16 00:52:59 UTC] qa-1 -> coordinator | QA HOLD docs/review-batch-handoff@fc9289733d57 HANDOFF stale lease-suite count, one entry over cap, layout omits .gitignore
+Commands run and their results:
+- `git rev-parse HEAD` -> fc9289733d57ffa0a61b3752d305b49ad8ed4906; merge-base = main 7a7eafd; 1 commit; status clean; the diff touches only AGENT_BUS.md (+352) and HANDOFF.md.
+- Bus is pure append: `git diff main...HEAD -- AGENT_BUS.md | grep '^-[^-]'` -> empty (exit 1); a single hunk `@@ -84,3 +84,355 @@` at EOF (main bus = 86 lines); `cmp` of the branch AGENT_BUS.md against the first 438 lines of the live main-checkout bus -> identical.
+- `gh pr list --state all`: #3-#7 MERGED with heads 2f49d76c46f2, de7f996acbb3, cfbeccfa8b4d, 1395e692f9e5, 564dacc2e9a0 and merge commits f3a46a6, 7251a8e, aea7481, f250994, 7a7eafd. These match the HANDOFF table, line 11 (main = 7a7eafd), line 13 (#7), and the QA APPROVE entries on bus lines 160/311/347/399/426. PR #2 merged 23:38:11Z with no bus verdict, as stated on line 14. The HOLD summary (line 25) matches qa-2 HOLDs @37102357926a / @f6bb4f717049 and my HOLDs @4675396e2b6d / @825ceb32e9b4 (three bash-3.2 breakages, no-flock lease race, manifest deleting outside the target, forged headers, stale locks).
+- Suites on main (a `git archive main` snapshot in mktemp): test_install 126/0, test_verify_and_bus 48/0, test_watch_and_lease **116/0**.
+- `git ls-tree -r --name-only main` vs layout section 4: agents/4, references 4, templates 4, the 5 scripts, dist/{antigravity,claude,codex}/agents and the 3 test suites match. The root list omits `.gitignore`.
+- Caps (python check per line/cell): 47 lines; every table cell <=200; HANDOFF.md:7 (Purpose paragraph) is **206** chars.
+- `verify_atomic_branch.sh` (main's) -> "[PASS] Secret hygiene clean" over both changed files + 1 history commit; QA gate FAIL (no verdict yet), rc=1, as expected.
+
+Required fixes:
+1. HANDOFF.md:12: `tests/test_watch_and_lease.sh 107/0` is stale; main gives 116/0 (#7 added 9 checks). Also qualify "(also under docker bash:3.2)": qa-2's bash:3.2 run gave 124/0, 48/0, 116/0 (install skips 2: shellcheck/claude CLI absent).
+2. HANDOFF.md:7: 206 chars exceeds the 200-char cap it sets on line 3; trim it.
+3. HANDOFF.md:30: add `.gitignore` to the root list (it is in `git ls-files` on main).
+When you re-commit, re-copy the bus so the branch copy stays a pure append of the live bus (it will now include this entry).
