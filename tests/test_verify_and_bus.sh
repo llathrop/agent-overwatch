@@ -286,6 +286,23 @@ else
   nok "20 writers vs dead lock: one break, no interleaving, no leftover locks" "bad=$bad breaks=$breaks leftover=$leftover"
 fi
 
+# 10e. flock path: a held flock is respected with a bounded wait (no flock -w needed)
+if command -v flock >/dev/null 2>&1; then
+  FLBUS="$WORK/flheld.md"; printf '# bus\n' > "$FLBUS"
+  flock -x "$FLBUS" sleep 4 &
+  FLPID=$!
+  sleep 0.5
+  ERR="$(BUS_APPEND_LOCK_WAIT=1 "$BUSAPP" --bus "$FLBUS" --from dev-1 --to all --type STATUS --subject "held" < /dev/null 2>&1)"; RC=$?
+  wait "$FLPID" 2>/dev/null
+  if [[ $RC -eq 1 && "$ERR" == *"Timed out after 1s"* ]] && ! grep -q 'STATUS held$' "$FLBUS"; then
+    ok "held flock -> bounded wait then timeout"
+  else
+    nok "held flock -> bounded wait then timeout" "rc=$RC $ERR"
+  fi
+else
+  ok "held flock test skipped (no flock)"
+fi
+
 # 11. Concurrent appends do not interleave (flock and O_EXCL lockfile fallback)
 check_concurrent() { # LABEL ENVPREFIX
   local label="$1" cbus="$WORK/cbus-$1.md" i

@@ -234,7 +234,16 @@ HEADER_WRITTEN=""
 exec 9>>"$BUS"
 # BUS_APPEND_NO_FLOCK=1 forces the lockfile fallback (used by tests)
 if [[ "${BUS_APPEND_NO_FLOCK:-0}" != 1 ]] && command -v flock >/dev/null 2>&1; then
-  flock -x -w "${BUS_APPEND_LOCK_WAIT:-30}" 9 || die "Timed out waiting for lock on $BUS"
+  # Bounded non-blocking poll: BusyBox flock (Alpine) has no -w timeout option,
+  # but both util-linux and BusyBox support -n.
+  flock_wait="${BUS_APPEND_LOCK_WAIT:-30}"
+  [[ "$flock_wait" =~ ^[0-9]+$ ]] || die "BUS_APPEND_LOCK_WAIT must be an integer"
+  flock_tries=0
+  until flock -n -x 9 2>/dev/null; do
+    flock_tries=$((flock_tries + 1))
+    [[ "$flock_tries" -le $((flock_wait * 10)) ]] || die "Timed out after ${flock_wait}s waiting for lock on $BUS"
+    sleep 0.1
+  done
   write_entry
 else
   # Fallback: O_EXCL lockfile created by bash noclobber (open(2) O_CREAT|O_EXCL),
