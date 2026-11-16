@@ -31,15 +31,20 @@ Next Handoff:
 ### 2.1 Coordinator / Orchestrator
 
 - **Core Duties:**
-  1. Partition work into collision-free lanes before spawning writers.
-  2. Keep 1 `qa-agent` assigned per 2–4 active workers.
-  3. Keep turns short — delegate coding, deep reading, builds, and deploys; avoid becoming a serial bottleneck.
-  4. Dispatch non-dependent future work whenever an active lane hits a slow build, test run, or deploy soak.
-  5. Route raw diffs, exact paths, and test outputs directly to QA (never paraphrase away evidence).
-  6. Own final merge decisions only after `QA APPROVE`.
+  1. Run `scripts/coordinator_lease.sh status` before acting; `claim` (or `claim --takeover` for a stale lease) and `renew` while active. If the lease shows you were replaced, stand down or coordinate on the bus.
+  2. Partition work into collision-free lanes before spawning writers.
+  3. Scale QA to the review load so verification doesn't queue.
+  4. Keep turns short: delegate coding, deep reading, builds, and deploys; avoid becoming a serial bottleneck.
+  5. Don't wait to do something that must be done in the project. If a lane is busy and another required slice doesn't depend on it, start that slice now with a separate agent. Don't invent optional work to fill the wait.
+  6. Route raw diffs, exact paths, and test outputs directly to QA (never paraphrase away evidence).
+  7. Merge only after QA's own `QA APPROVE <branch>@<sha12>` matches the branch HEAD and `verify_atomic_branch.sh` passes.
+  8. Track usage when the runtime reports it and warn the user near limits (see `model-routing-and-scaling.md` section 5).
 - **Anti-Patterns:**
   - Two writers assigned to overlapping files or the same branch/worktree.
-  - Implementing large patches inline while workers wait idle.
+  - Implementing large patches inline while workers wait on you.
+  - Writing, paraphrasing, or relaying a QA verdict ("QA says it's fine") instead of letting QA post its own.
+  - Running a command QA was denied, on QA's behalf.
+  - Deferring a required, independent slice until the current lane finishes; or, the opposite, spawning speculative work nobody asked for.
   - Letting an unverified branch pile up across multiple milestones.
   - Ignoring or softening a `QA HOLD`.
 
@@ -99,12 +104,21 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
   1. Independently re-read modified files/plans and run read-only verification (`git diff`, test commands, schema checks, read-only health/log probes).
   2. Maintain zero-trust: never mark `APPROVE` from someone else's summary without observing the artifact or command output directly.
   3. Scan diffs, logs, and coordination artifacts for accidentally leaked secrets or credentials.
-  4. Emit one clear verdict:
-     - **`QA APPROVE`** with verified file paths, line numbers, checks run, and exact scope.
-     - **`QA HOLD`** with numbered blocking issues, exact file/line/log citations, and concrete fix criteria.
+  4. Post its own verdict, bound to the exact commit, from the branch's checkout:
+     ```bash
+     scripts/bus_append.sh --from qa-1 --to coordinator,dev-1 --type "QA APPROVE" \
+       --subject "parser error handling" --ref auto <<'EOF'
+     - Ran `pytest tests/parser` -> 31 passed
+     - Checked src/parser.py:40-72 (empty input path handled)
+     EOF
+     ```
+     `--ref auto` records `<branch>@<sha12>`. **`QA APPROVE`** lists verified files, checks run, and scope; **`QA HOLD`** numbers each blocking issue with `file:line`/log citations and fix criteria. Any later commit on the branch needs a fresh review.
+  5. For live deploys, react to `scripts/overwatch_watch.sh` events (`BUS:`, `SECRET?`, `CHECK-FAIL`) instead of assuming it can watch continuously; a subagent's turn ends.
+  6. If a command is denied, say so in the verdict and verify from the evidence others posted. Never work around a permission denial.
 - **Anti-Patterns:**
   - Editing code, fixing typos, or restarting services directly (creates race conditions and hides systemic author/ops errors).
   - Rubber-stamping an unrun test suite or partial diff.
+  - Approving by message to the coordinator instead of a ref-bound bus entry.
 
 ---
 
@@ -123,12 +137,14 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
 - [ ] `git diff` stays strictly inside the assigned atomic slice and branch.
 - [ ] Logic handles boundary/error cases cleanly without hidden duplication.
 - [ ] Automated tests and linters ran *after the final edit* and passed without skipped/relaxed assertions.
+- [ ] The verdict ref matches the branch HEAD being reviewed (`git rev-parse --short=12 HEAD`).
 - [ ] No hardcoded secrets, tokens, private keys, or sensitive `.env` files are staged or committed.
 - [ ] Docs/`HANDOFF.md` reflect any changed behavior, flags, or setup steps.
 
 ### 3.3 Operations / Deploy Audit (Pre-Deploy & Post-Deploy)
 
 - [ ] **Pre-deploy:** Backup artifact exists, is non-empty, and uses restrictive permissions where sensitive; dry-run/syntax check passed.
+- [ ] **During rollout:** `overwatch_watch.sh` runs with the agreed `--check` health commands, and every `CHECK-FAIL` / `SECRET?` event was looked at.
 - [ ] **Post-deploy:** Target service/release reports healthy status; unrelated services remain undisturbed; error logs show zero new regressions.
 - [ ] **Secret hygiene:** Rollout output, status snapshots, and bus logs contain zero secret values.
 
@@ -149,3 +165,20 @@ The subagent definitions under `agents/*.md` use Antigravity's native plugin fro
 1. **Antigravity:** Installs `plugin.json`, `skills/`, and `agents/*.md` directly (no tool rewriting needed).
 2. **Claude Code:** Translates `tools:` entries using the mapping above, strips Antigravity-specific keys (`subagent`, `mainAgent`, `manage_task`), and optionally sets `model:` (`opus` / `sonnet` / `haiku`) unless uniform/fallback routing is selected.
 3. **Codex / Gemini CLI / Cursor:** Installs `skills/agent-overwatch/` into the tool's skills folder (or projects instructions into `AGENTS.md` / `GEMINI.md` / `.cursor/rules/`) and drops unsupported agent frontmatter.
+
+**Install options** (from the repository root of https://github.com/llathrop/agent-overwatch):
+- `./install.sh` copies the skill and generated agent files into the chosen runtime's folders.
+- `./install.sh --link` symlinks the skill folder and generated agents instead, so `git pull` in the clone updates the install.
+- `./install.sh --uninstall` removes what the installer placed.
+- Claude Code can also install it as a native plugin: `/plugin marketplace add llathrop/agent-overwatch`, then install the `agent-overwatch` plugin from that marketplace (see the repository README for the exact names).
+
+---
+
+## 5. QA Permissions Recipe (Enforce Read-Only)
+
+A prompt that says "read-only" is enforced only by the model following it. Use the runtime's own controls as well:
+
+- **Claude Code:** give the QA and research agents a `tools:` list without `Edit`, `MultiEdit`, `Write`, or `NotebookEdit` (the installer generates `Read, Glob, Grep, Bash, WebSearch, WebFetch`). Because `Bash` can still write, add permission allowlist entries in `.claude/settings.json` for the specific read-only commands QA needs (for example `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(pytest:*)`, or a remote read such as `Bash(ssh host systemctl status:*)`), and leave everything else to prompt or deny.
+- **Other runtimes:** use their equivalent (sandbox or approval modes, per-agent tool lists, command allowlists).
+- **When QA is denied:** QA states which command was denied and verifies from the evidence that authors or deployers posted (command plus output, `file:line`). It never works around the denial with another tool or path.
+- **The coordinator** must not run denied commands on QA's behalf. If the evidence is not enough, ask the owning lane to post it, or ask the user to grant the permission.

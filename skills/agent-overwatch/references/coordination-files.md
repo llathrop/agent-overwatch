@@ -1,6 +1,6 @@
 # Coordination Files & Built-In Supersession
 
-Standards for `HANDOFF.md`, `AGENT_BUS.md`, optional `QA_BUS.md` / `status/<agent>.md`, built-in tool supersession, and monorepo subdirectory scoping.
+Standards for `HANDOFF.md`, `AGENT_BUS.md`, the coordinator lease, optional `QA_BUS.md` / `status/<agent>.md`, built-in tool supersession, and monorepo subdirectory scoping.
 
 ---
 
@@ -31,6 +31,7 @@ Always prefer the host runtime's native coordination primitives over file pollin
 - (If root of a multi-project workspace, link to child `HANDOFF.md` files here.)
 
 ## 2. Current State (as of YYYY-MM-DD HH:MM UTC)
+- **Coordinator:** `<session id>` (lease in `status/coordinator.lease`)
 - **Active branch(es):** `<branch>` (status: in progress / awaiting QA / merged)
 - **Recently completed:** Short bullet list with commit SHAs / PR numbers.
 - **Known blockers or risks:** Clear owner and mitigation.
@@ -45,8 +46,10 @@ Always prefer the host runtime's native coordination primitives over file pollin
 ```
 
 **Maintenance Rules:**
-- Update `HANDOFF.md` when starting/completing a milestone, changing branches, or shifting priorities — not on every trivial tool call.
+- Update `HANDOFF.md` when starting/completing a milestone, changing branches, or shifting priorities, not on every trivial tool call.
 - Assign update ownership cleanly (usually the Coordinator or Lead) so parallel agents do not overwrite each other's `HANDOFF.md` edits.
+- **Size caps:** keep each table cell or bullet at 200 characters or fewer and the whole file around 150 lines. It is a current-state summary; history, evidence, and long explanations go to the bus, and `HANDOFF.md` points at them.
+- **Rate-limit pauses:** when a session pauses on a 429 or usage limit, it records running lanes, branch@SHA, pending verdicts, and the next step here so another session can resume.
 
 ---
 
@@ -57,44 +60,85 @@ Always prefer the host runtime's native coordination primitives over file pollin
 Parallel agents **MUST NEVER** update `AGENT_BUS.md` or `QA_BUS.md` via full-file rewrite or read-then-patch edits, because concurrent writers will silently clobber earlier entries. Always:
 
 1. Read the last ~20 lines first to check current state.
-2. Append atomically using a single-quoted heredoc so the shell opens with `O_APPEND` and avoids unintended variable expansion:
+2. Append with `scripts/bus_append.sh`. It stamps the UTC time itself (never hand-type timestamps), appends atomically (using `flock` when available), and refuses a body or subject that matches a secret pattern, reporting only the line number:
 
 ```bash
-cat <<'EOF' >> AGENT_BUS.md
-
-### [2026-11-15 14:30 UTC] dev-1 -> qa-1,coordinator | RESULT feat/auth-middleware ready for QA
-- Branch: `feat/auth-middleware` @ `a1b2c3d`
+scripts/bus_append.sh --from dev-1 --to qa-1,coordinator --type RESULT \
+  --subject "feat/auth-middleware ready for QA" --ref auto <<'EOF'
 - Scope: `src/auth/middleware.ts`, `tests/auth/middleware.test.ts`
 - Verification: `npm test -- auth` passed (14/14).
 EOF
 ```
 
+Other flags: `--ref BRANCH@SHA` to name a ref explicitly, `--bus PATH` for a non-default bus file (e.g. a subproject's or `QA_BUS.md`), `--repo DIR` to resolve `--ref auto` in another checkout.
+
+**Fallback** when the script is not installed: a single-quoted heredoc append (`cat <<'EOF' >> AGENT_BUS.md`), with the timestamp taken from `date -u '+%F %T'` rather than typed by hand.
+
 ### 3.2 Message Format & Types
 
 ```markdown
-### [YYYY-MM-DD HH:MM UTC] <from> -> <to> | <TYPE> <concise subject>
+### [YYYY-MM-DD HH:MM:SS UTC] <from> -> <to> | <TYPE> [<branch>@<sha12>] <concise subject>
 - <bullets with exact paths, line ranges, commit SHAs, or command output summaries>
 ```
 
+**QA verdict header (branch- and SHA-bound):**
+
+```markdown
+### [YYYY-MM-DD HH:MM:SS UTC] qa-1 -> coordinator,dev-1 | QA APPROVE feat/auth-middleware@1a2b3c4d5e6f auth middleware
+```
+
+- The author field must contain `qa`, and QA writes the entry itself (`bus_append.sh --type "QA APPROVE"|"QA HOLD" --ref auto`). The coordinator never writes or relays a verdict.
+- The body cites evidence: commands run, their outputs, and `file:line` references.
+- `verify_atomic_branch.sh` takes the latest verdict for the branch; it must be `QA APPROVE` and its SHA must match HEAD (prefix of 7+ characters). A newer commit, or a later `QA HOLD`, blocks the merge until QA re-reviews.
+
 | `<TYPE>` | Emitter | Purpose |
 | --- | --- | --- |
-| `TAKEOVER` | Newly spawned agent | Acknowledge brief and scope before starting |
+| `TAKEOVER` | New coordinator session / newly spawned agent | Coordinator replacement (posted automatically by `coordinator_lease.sh claim --takeover`), or an agent acknowledging its brief |
 | `BRIEF` | Coordinator | Assign scoped atomic task (when file-bus mode is active) |
 | `ACTION` | `deploy-agent` / `dev-agent` | State pre-flight intent before mutating shared state |
 | `RESULT` | `research-agent` / `dev-agent` / `deploy-agent` | Deliver verified artifacts and checks |
 | `CONCERN` | Any worker | Flag unexpected state, failure, or scope collision immediately |
-| `QA APPROVE` | `qa-agent` | Clear deliverable for execution or merge (cite evidence) |
-| `QA HOLD` | `qa-agent` | Block progression with numbered defects + line/log citations |
+| `QA APPROVE` | `qa-agent` only | Clear `<branch>@<sha12>` for execution or merge (cite evidence) |
+| `QA HOLD` | `qa-agent` only | Block `<branch>@<sha12>` with numbered defects + line/log citations |
 | `STATUS` | Any agent | Periodic milestone update on long-running lanes |
+| `USAGE` *(optional)* | Coordinator | Usage/spend figure and its source when the runtime reports one (e.g. near 75%/90% of a limit) |
 
 ### 3.3 Optional `QA_BUS.md` and `status/<agent>.md`
 
-- **`QA_BUS.md`:** Useful in high-throughput swarms when separating `QA APPROVE` / `QA HOLD` verdicts from general chatter helps the Coordinator track gates cleanly. Follows the exact same `cat <<'EOF' >> QA_BUS.md` rule.
+- **`QA_BUS.md`:** Useful in high-throughput swarms when separating `QA APPROVE` / `QA HOLD` verdicts from general chatter helps the Coordinator track gates cleanly. Append with `scripts/bus_append.sh --bus QA_BUS.md` (same rules as the main bus); fallback: a quoted heredoc append (`cat <<'EOF' >> QA_BUS.md`).
 - **`status/<agent>.md`:** Optional single-line/short-card snapshot per agent (e.g., `status/dev-1.md`, `status/qa-1.md`). An agent may overwrite **only its own** `status/<name>.md` file.
+
+### 3.4 Committing the Bus Across Parallel Branches
+
+When `AGENT_BUS.md` is committed and several branches each append to it, ordinary merges conflict at the file end. `init_workspace.sh` adds this line to `.gitattributes`:
+
+```text
+AGENT_BUS.md merge=union
+```
+
+Union merge keeps both sides' appended lines. It is safe only because the bus is append-only; never use it for `HANDOFF.md`.
 
 ---
 
-## 4. Subdirectory Scoping (Monorepos & Multi-Project Workspaces)
+## 4. Coordinator Lease & Takeover
+
+Only one session should coordinate a workspace at a time. The lease file `status/coordinator.lease` (key=value: `id`, `since`, `last_seen` in UTC) records which one.
+
+```bash
+scripts/coordinator_lease.sh status --id "$SESSION_ID"   # 0 = held by me, 3 = held by another live id, 4 = expired/none
+scripts/coordinator_lease.sh claim  --id "$SESSION_ID" --ttl 30
+scripts/coordinator_lease.sh renew  --id "$SESSION_ID"   # at each batch boundary
+scripts/coordinator_lease.sh release --id "$SESSION_ID"  # when handing off cleanly
+```
+
+- **Every session checks `status` before acting** on the workspace (dispatching, merging, editing `HANDOFF.md`).
+- `claim` refuses while another id holds a non-expired lease. To replace a stale or abandoned coordinator, use `claim --takeover`, which also appends a `TAKEOVER` entry to the bus.
+- **A returning session that sees itself replaced** (status exit 3) stands down, or posts on the bus and coordinates with the current holder. It does not resume merging or dispatching.
+- `overwatch_watch.sh` warns when the lease goes stale.
+
+---
+
+## 5. Subdirectory Scoping (Monorepos & Multi-Project Workspaces)
 
 In a workspace holding multiple services, packages, or independent subprojects:
 
@@ -123,8 +167,10 @@ workspace/
 
 ---
 
-## 5. Secret Hygiene Across All Coordination Files
+## 6. Secret Hygiene Across All Coordination Files
 
 - **NEVER** write passwords, API tokens, SSH private keys, session cookies, webhook secrets, encryption passphrases, or raw `.env` values into `HANDOFF.md`, `AGENT_BUS.md`, `QA_BUS.md`, `status/*.md`, or native board posts.
 - Refer to credentials strictly by **variable name, key path, file permissions, and byte length** (e.g., `"API_TOKEN present in .env, mode 0600, len=40"`).
-- Always run output-redaction checks (`grep -iE "password|token|secret|key|bearer|authorization"`) before pasting diagnostic logs into any shared artifact.
+- Always run output-redaction checks (`grep -iE "password|token|secret|key|bearer|authorization"`) before pasting diagnostic logs into any shared artifact. `bus_append.sh` also refuses entries that match a secret pattern.
+- **False positives:** add a regex per line to `.overwatch/secret-allowlist` (created by `init_workspace.sh`, read by `overwatch_watch.sh --allowlist`). Allowlist the specific pattern or path, never a broad match.
+- **Reporting a hit:** give `file:line` and the pattern name (e.g. `config/app.yml:12 aws-access-key`), never the matched value.

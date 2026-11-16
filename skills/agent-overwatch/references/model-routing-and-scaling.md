@@ -1,6 +1,6 @@
 # Model Cost Routing, Graceful Fallback & Parallel Scaling
 
-Guidelines for matching model capability to task risk, scaling workers horizontally without collisions, and dispatching non-dependent work continuously.
+Guidelines for matching model capability to task risk, scaling workers horizontally without collisions, starting independent required work without waiting, and tracking usage when the runtime reports it.
 
 ---
 
@@ -36,30 +36,47 @@ Scale workers horizontally whenever work divides into independent units with zer
 
 ### 3.1 Sharding Patterns
 
-| Work Shape | How to Shard Safely | QA Ratio |
+| Work Shape | How to Shard Safely | QA Coverage |
 | --- | --- | --- |
 | Multi-module feature | One `dev-agent` + dedicated `git worktree` per directory/module (`dev-api`, `dev-ui`, `dev-tests`) | 1 `qa-agent` auditing merged interfaces & per-branch diffs |
 | Multi-area codebase audit | Parallel `research-1..N` split by subsystem or question | 1 `qa-agent` cross-checking cited files/assumptions across reports |
 | Parallel test / validation suites | Split unit, integration, lint/typecheck, and build verification across parallel read-only/isolated runners | 1 `qa-agent` verifying full command matrix and edge assertions |
-| Multi-host / multi-service rollout | One `deploy-agent` per independent host/environment **only if** services share no rolling lock or coupled DB migration | 1 `qa-agent` per 2–4 deploy lanes verifying backups + post-deploy health |
+| Multi-host / multi-service rollout | One `deploy-agent` per independent host/environment **only if** services share no rolling lock or coupled DB migration | QA sized to the number of rollouts in flight, verifying backups + post-deploy health (driven by `overwatch_watch.sh` events) |
 
-### 3.2 Mandatory QA Ratio & Specialization
+### 3.2 Scaling QA to the Review Load
 
-- Maintain **roughly 1 `qa-agent` per 2–4 active workers**.
-- When scaling past ~6 active workers, split QA by verification phase or domain (`qa-plan`, `qa-diff`, `qa-ops`) so verification stays parallel rather than forming a single-threaded review queue.
+- Scale QA to the review load so verification doesn't queue. There is no fixed ratio: a few large or risky diffs can need more QA than many small doc changes.
+- Signs QA is under-provisioned: `RESULT` entries waiting for a verdict while authors are already done, or branches waiting to merge. Add a QA agent or split QA by phase or domain (`qa-plan`, `qa-diff`, `qa-ops`).
 - Two writers **never** share one file or branch; if two lanes must touch a shared interface file, serialize that shared interface first (with QA sign-off), then fan out implementation lanes from that stable contract.
 
 ---
 
-## 4. Non-Dependent Work Rule (Zero-Idle Dispatch)
+## 4. Non-Dependent Work Rule
 
-Waiting idly for a slow operation wastes wall-clock time. Whenever an active agent enters a blocking or long-running phase, the Coordinator **immediately dispatches non-dependent work** to other agents (still under mandatory QA):
+> "Don't wait to do something that must be done in the project. If an agent is busy working on one aspect, and some other aspect doesn't depend on that work, work on it now with a separate agent (or agents)."
 
-| Blocking Activity (Lane A) | Immediate Non-Dependent Work to Dispatch (Lanes B, C...) | QA Pairing |
+The rule is about **not deferring necessary independent work**. It is not about keeping agents busy. Only dispatch work that the project actually requires; never invent optional or speculative tasks to fill a wait.
+
+| Situation (Lane A busy) | Required work that may start now | Not this |
 | --- | --- | --- |
-| Long test suite, CI run, or container build | `research-agent` investigates the next atomic slice; `dev-agent` writes docs or unrelated module tests in a separate worktree | `qa-agent` audits the new research plan or doc/test PR |
-| Timed deployment soak / health observation window | `dev-agent` prepares next non-dependent feature branch; `research-agent` checks compatibility notes for upcoming upgrade | `qa-agent` monitors Lane A live logs/health while gating Lane B's plan |
-| Deep external research / dependency audit | `dev-agent` creates test fixtures, CI skeleton, or non-blocked refactoring on an independent branch | `qa-agent` audits fixtures and validates independent refactor |
-| Waiting for user confirmation on upstream PR | Prepare unrelated local documentation, tests, or subsequent independent local work | `qa-agent` pre-audits local staged diffs |
+| Long test suite, CI run, or build on branch A | A planned slice B that does not depend on A's result (separate worktree) | "Nice to have" refactors or extra docs nobody asked for |
+| Deploy soak / health observation window | QA audit of an already-finished sibling branch; the next planned slice that touches other files/hosts | A new feature that was never in scope |
+| Research on question X | Implementation of an already-approved, unrelated plan Y | Coding the part that depends on X's answer |
+| Waiting for user confirmation | Planned local work that the decision does not affect | Guessing the user's answer and building on it |
 
-**Guardrail:** Never dispatch side-lane work that **mutates the same runtime target, branch, or files** under active validation in Lane A, and never promote or merge any side lane without `qa-agent` `APPROVE`.
+**Guardrails:**
+- Never dispatch side-lane work that **mutates the same runtime target, branch, or files** under active validation in Lane A.
+- Never promote or merge any lane without its own `qa-agent` `QA APPROVE`.
+- If nothing independent remains, waiting is correct.
+
+---
+
+## 5. Usage & Budget Awareness
+
+Parallel lanes multiply spend. Track it only when real numbers exist.
+
+1. **If the runtime exposes usage or spend numbers** (a usage/limits command, statusline cost data, a budget API, token-target directives in the prompt), read them at batch boundaries and before launching new lanes.
+2. **Warn the user as limits approach**, for example at about 75% and again at about 90%. Each warning states the current figure and which lanes are still running, so the user can decide what to stop.
+3. **If no usage numbers are available, ignore this section.** Don't estimate tokens, don't guess at spend, and don't throttle parallelism on a hunch.
+4. **On a rate limit or HTTP 429:** pause instead of retrying in a loop. Record the state in `HANDOFF.md` (running lanes, branches with SHAs, verdicts pending, the next step) so another session can resume, then retry later or fall back per section 2.
+5. **Optional bus entry:** `scripts/bus_append.sh --type USAGE` with the figure and its source (for example `weekly limit 76% per /usage`), so other sessions see it.

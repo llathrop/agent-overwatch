@@ -25,10 +25,13 @@ Never build five unrelated milestones on one giant branch and try to review/merg
   main (clean, verified)
     │
     ├──► 1. git checkout -b feat/slice-a main
-    │       ├── dev-agent implements + runs tests
-    │       └── qa-agent audits diff + tests ──► QA APPROVE
+    │       ├── dev-agent implements + runs tests, commits, posts RESULT feat/slice-a@<sha12>
+    │       └── qa-agent audits that exact SHA and posts its own
+    │           QA APPROVE feat/slice-a@<sha12>  (bus_append.sh --ref auto)
+    │           (new commits after this? -> back to qa-agent for re-review)
     │
-    ├──◄ 2. Merge feat/slice-a -> main immediately (PR or local merge)
+    ├──◄ 2. verify_atomic_branch.sh passes (verdict matches HEAD)
+    │       Merge feat/slice-a -> main immediately (PR or local merge)
     │       Delete merged feat/slice-a branch/worktree
     │
     └──► 3. git checkout -b feat/slice-b main  (branched from updated main!)
@@ -40,6 +43,14 @@ Never build five unrelated milestones on one giant branch and try to review/merg
 - Every merge keeps `main` green and releasable.
 - QA diffs stay small (tens or hundreds of lines, not thousands), catching subtler defects faster.
 - Parallel branches rebase onto updated `main` cleanly with minimal conflict radius.
+
+### 1.3 Verdict-Bound Merge Gate
+
+- **QA writes its own verdict** on the bus with `scripts/bus_append.sh --type "QA APPROVE" --ref auto` (or `"QA HOLD"`), run from the branch checkout so the ref is `<branch>@<sha12>` (from a worktree with a shared bus: `--repo <worktree> --bus <main-checkout>/AGENT_BUS.md`). The body cites commands, outputs, and `file:line` evidence.
+- **The coordinator never writes or relays a verdict.** A coordinator entry saying "QA approved" does not count, and the gate ignores it (the author must contain `qa`).
+- **New commits invalidate an approval.** If the branch HEAD moves after `QA APPROVE`, QA must review the new SHA.
+- **Gate before merging:** run `scripts/verify_atomic_branch.sh`. It checks the latest verdict for this branch, requires `QA APPROVE` with a SHA matching HEAD, and secret-scans the lines added by every commit since the merge base. With no matching verdict it fails.
+- **`--allow-external-qa`** skips the verdict requirement with a warning. Use it only when QA is recorded somewhere else on purpose (for example an approved PR review), and say so in the merge message. `--allow-bus-only` is a deprecated alias.
 
 ---
 
@@ -58,6 +69,7 @@ git worktree add ../wt-cli    -b feat/cli-flags main
 - Author 1 works exclusively inside `../wt-parser` on `feat/parser-errors`.
 - Author 2 works exclusively inside `../wt-cli` on `feat/cli-flags`.
 - Readers and `qa-agent` inspect each branch/worktree read-only (`git -C ../wt-parser diff main...HEAD` or `git diff main...feat/parser-errors`).
+- **Committed bus:** if `AGENT_BUS.md` is committed and several branches append to it, keep `AGENT_BUS.md merge=union` in `.gitattributes` (added by `init_workspace.sh`) so those appends merge without conflicts.
 - **Critical Cleanup Rule:** NEVER remove a worktree (`git worktree remove`) until its commits are merged into `main` (or explicitly archived/abandoned by coordinator decision). Removing a worktree with unmerged work risks losing the lane's changes.
 
 ---
@@ -76,9 +88,9 @@ For repositories or personal forks owned by the user/team:
    git push -u origin feat/rate-limiter
    gh pr create \
      --title "feat: add rate limiter middleware" \
-     --body "Closes #42\n\n## Verification\n- \`pytest tests/test_rate_limit.py\`: 12 passed\n- QA Verdict: APPROVE"
+     --body "Closes #42\n\n## Verification\n- \`pytest tests/test_rate_limit.py\`: 12 passed\n- QA Verdict: QA APPROVE feat/rate-limiter@<sha12> (AGENT_BUS.md)"
    ```
-4. **Merge once CI + QA pass**, then sync local `main` and prune the feature branch:
+4. **Merge once CI + QA pass** and `verify_atomic_branch.sh` succeeds for the current HEAD, then sync local `main` and prune the feature branch:
    ```bash
    gh pr merge --squash --delete-branch
    git checkout main && git pull --ff-only

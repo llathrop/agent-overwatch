@@ -14,6 +14,7 @@ When this rule is activated (or when performing multi-file refactors, complex fe
 - Operate exclusively on dedicated, single-purpose branches: `feat/<name>` or `fix/<name>`.
 - Do not make opportunistic or unrelated edits outside the agreed workstream scope.
 - If multiple workstreams are being developed in parallel, ensure they touch independent files and non-overlapping modules.
+- "Don't wait to do something that must be done in the project. If an agent is busy working on one aspect, and some other aspect doesn't depend on that work, work on it now with a separate agent (or agents)." Start required independent work now; never invent optional work to fill time.
 
 ---
 
@@ -21,7 +22,7 @@ When this rule is activated (or when performing multi-file refactors, complex fe
 - If `HANDOFF.md` exists in the repository root, inspect it before beginning work to understand the active branch and architectural constraints.
 - Upon completing a milestone or opening a pull request, update `HANDOFF.md`:
   - Update the workstream status (`IN_PROGRESS`, `QA_READY`, or `DONE`).
-  - Document deliverables, passing test evidence, and remaining blockers.
+  - Document deliverables, passing test evidence, and remaining blockers. Keep each entry to 200 characters or fewer; detail goes to `AGENT_BUS.md` via `scripts/bus_append.sh`.
 
 ---
 
@@ -31,10 +32,16 @@ When this rule is activated (or when performing multi-file refactors, complex fe
 - Perform a secret scan across your diff:
   - Verify that no API keys, tokens, passwords, or private environment settings are committed.
 - Verify a clean rollback strategy exists (e.g., `git revert <commit>`).
-- Require a structured QA Overwatch sign-off (`APPROVE` verdict) before requesting integration into the base branch.
+- Require a structured QA Overwatch sign-off before requesting integration into the base branch. QA posts its own `QA APPROVE` or `QA HOLD` with `scripts/bus_append.sh --ref auto` (bound to `<branch>@<sha12>`, citing commands, outputs, `file:line`); never write or relay a verdict for QA. New commits need re-review.
+- Report secret-scan hits as `file:line` plus pattern, never the value; put known false positives in `.overwatch/secret-allowlist`.
 
 ---
 
-## 4. Live User-Facing Progress Updates
+## 4. Usage & Budget Awareness
+- If usage or spend numbers are available, warn the user near ~75% and ~90%, naming what is still running. If none are available, ignore this; don't guess or throttle. On a rate limit, pause and record state in `HANDOFF.md`.
+
+---
+
+## 5. Live User-Facing Progress Updates
 - Deliver clear, self-contained progress updates as each batch or phase finishes rather than waiting until the entire project ends or assuming the user read internal logs/`AGENT_BUS.md`.
 - Summarize what changed and why, technical tradeoffs, any QA catches/fixes, verification results, and what parallel work runs next (keeping output concise and secret-free).

@@ -7,6 +7,7 @@ Task to evaluate or coordinate: {{args}}
 Follow this mandatory execution sequence:
 1. Workspace Context & Handoff Review:
    - Check if HANDOFF.md exists in the workspace. Read the active workstream status and integration branch.
+   - If acting as coordinator, run scripts/coordinator_lease.sh status first; claim --takeover only to replace a stale coordinator.
 2. Atomic Scope & Branching:
    - Ensure the current task is isolated on a dedicated feature branch (`feat/<name>` or `fix/<name>`).
    - Verify that changes do not cross into unrelated modules.
@@ -15,11 +16,15 @@ Follow this mandatory execution sequence:
    - Verify that all assertions pass with exit code 0.
 4. Security & Secret Audit:
    - Audit the git diff for credentials, tokens, private keys, or insecure defaults.
+   - Report any hit as file:line plus pattern name, never the value. Known false positives go in .overwatch/secret-allowlist.
 5. Rollback Verification:
    - Verify that an automated rollback strategy (e.g., git revert or backup restoration) is documented.
 6. QA Decision:
-   - Formulate a structured verdict:
-     - Issue `APPROVE` if all criteria pass.
-     - Issue `HOLD` with a numbered list of blockers if any tests fail, secrets are detected, or scope creeps.
-7. Update HANDOFF.md with the latest status and next steps.
+   - Post your own verdict, bound to the reviewed commit:
+     scripts/bus_append.sh --from qa-1 --to coordinator --type "QA APPROVE" --subject "<subject>" --ref auto   (body on stdin)
+     - Use "QA APPROVE" if all criteria pass, citing commands, outputs, and file:line evidence.
+     - Use "QA HOLD" with a numbered list of blockers if any tests fail, secrets are detected, or scope creeps.
+   - A verdict covers only <branch>@<sha12>; new commits need re-review.
+   - If a command is denied, say so and verify from posted evidence. Never work around the denial.
+7. Update HANDOFF.md with the latest status and next steps (keep entries to 200 characters or fewer; detail goes to the bus).
 """
