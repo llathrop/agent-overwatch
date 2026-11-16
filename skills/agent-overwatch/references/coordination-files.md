@@ -10,9 +10,9 @@ Always prefer the host runtime's native coordination primitives over file pollin
 
 | Environment | Live Coordination Mechanism | `AGENT_BUS.md` Role | `HANDOFF.md` Role |
 | --- | --- | --- | --- |
-| **Antigravity Swarm** | **Superseded by** `post_message`, `read_board`, `swarm_wait` (cite `#seq` IDs instead of copy-pasting) | Omit for live chat; optional only if a Git-committed summary log is desired | Maintained at milestones/handoffs |
+| **Swarm message board** | **Superseded by** the board's post/read/wait primitives (cite message IDs instead of copy-pasting) | Omit for live chat; optional only if a Git-committed summary log is desired | Maintained at milestones/handoffs |
 | **Native Parent / Subagent Messaging** | **Superseded by** native `send_message` / subagent response channel | Optional unless multiple asynchronous peers/sessions need shared file history | Maintained at milestones/handoffs |
-| **Claude Code Agent Teams / Task Board** | **Superseded by** native teammate messaging & shared task list | Optional for cross-session persistence | Maintained at milestones/handoffs |
+| **Native agent teams / shared task board** | **Superseded by** native teammate messaging & shared task list | Optional for cross-session persistence | Maintained at milestones/handoffs |
 | **Plain CLI / Multi-Tool / Cross-Session** | **Required:** `AGENT_BUS.md` (and optional `QA_BUS.md`) | **Primary append-only coordination bus** | **Required living state file** |
 
 **Rule:** Never force agents to duplicate every native board post into `AGENT_BUS.md`. Either use the native board for live turn-to-turn traffic OR use `AGENT_BUS.md` when no native board exists or when a durable repo log is explicitly needed.

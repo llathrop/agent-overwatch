@@ -6,10 +6,12 @@ A general-purpose, cross-platform multi-agent workflow skill, plugin bundle, ins
 
 - **Don't defer independent work:** If necessary work doesn't depend on work already in progress, don't defer it. Run it now on a separate agent (`research-agent`, `dev-agent`, `deploy-agent`) across non-overlapping files, modules, and worktrees.
 - **Mandatory independent QA:** Every research plan, code diff, backup, and deployment is independently verified by a strictly read-only `qa-agent` (`APPROVE` or `HOLD` with exact file/line/command evidence) before moving forward or merging.
-- **Portable across tools:** Ships with a native Claude Code plugin, [install.sh](install.sh), and tool examples for Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub Issue/PR templates.
+- **Portable across tools:** The workflow is plain Markdown and shell, so any agent or human can follow it. [install.sh](install.sh) and the per-tool adapters in `examples/` cover Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub Issue/PR templates.
 - **Atomic Git & GitHub discipline:** Small, single-purpose feature branches, incremental QA-gated merges back to `main`, automated pre-merge verification via [verify_atomic_branch.sh](skills/agent-overwatch/scripts/verify_atomic_branch.sh), and strict upstream safety guardrails for public repositories.
 
 ## Install
+
+The core (`skills/`, `agents/`) is tool-neutral. The sections below are per-tool adapters.
 
 ### Claude Code: native plugin (recommended)
 

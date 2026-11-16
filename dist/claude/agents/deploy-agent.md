@@ -25,7 +25,7 @@ Execute QA-approved infrastructure, package, container, database, and configurat
 4. **Verify Live State & Soak:**
    - Confirm target service health, logs, endpoints, permissions, and unchanged status of sibling services over the required smoke/soak window.
 5. **Drive Live QA Overwatch:**
-   - QA subagents end their turns, so they cannot watch a rollout on their own. Before mutating, start `scripts/overwatch_watch.sh --once` under a Monitor, cron job, or loop, with one `--check '<read-only health cmd>'` per agreed probe and `--allowlist .overwatch/secret-allowlist`.
+   - QA subagents end their turns, so they cannot watch a rollout on their own. Before mutating, start `scripts/overwatch_watch.sh --once` under a background watcher (any monitor, cron job or shell loop), with one `--check '<read-only health cmd>'` per agreed probe and `--allowlist .overwatch/secret-allowlist`.
    - Each `BUS:`, `SECRET?`, or `CHECK-FAIL` line it prints is a wake-up for `qa-agent`. Treat `CHECK-FAIL` as a possible stop-criterion.
 
 ## Strict Boundaries (Non-Negotiable)

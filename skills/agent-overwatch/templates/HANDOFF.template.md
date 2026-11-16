@@ -30,7 +30,7 @@
 - **Check it before acting:** `coordinator_lease.sh status` (exit 0 = you hold it, 3 = another live session holds it, 4 = expired or none).
 - **Hold it while coordinating:** `coordinator_lease.sh claim`, then `renew` at least every `ttl_min` minutes (set `AO_COORDINATOR_ID` for a stable id).
 - **Takeover rule:** take over a live lease only when its holder is known to be gone, with `coordinator_lease.sh claim --takeover`, which posts a `TAKEOVER` bus entry. A returning coordinator that finds exit 3 must stop, read this file and the bus tail, and post before touching `main`.
-- **Watcher:** `overwatch_watch.sh --once` (or looped under a monitor) prints `LEASE stale: ...` when the lease expires.
+- **Watcher:** `overwatch_watch.sh --once` (or looped under a background watcher) prints `LEASE stale: ...` when the lease expires.
 
 ---
 
@@ -107,10 +107,10 @@ When a sub-package, service, or module within this repository has its own locali
 
 | Agent Identifier | Role / Persona | Model / Platform | Active Workstream | Current Step / Ownership | Status File / Channel |
 |---|---|---|---|---|---|
-| `qa-overwatch` | QA Overwatch | `pro` / `sonnet` | All | Auditing PRs and validating test runs | Built-in messaging / `AGENT_BUS.md` |
-| `dev-lead` | Lead Developer | `pro` / `sonnet` | `WS-01` | Implementing core business logic | Branch `feat/core-logic` |
-| `dev-worker-1` | Sub-Developer | `flash` / `haiku` | `WS-02` | Writing unit tests and edge cases | Branch `fix/edge-cases` |
-| `deploy-ops` | Deploy Specialist | `pro` / `sonnet` | `WS-01` | Staging deployment preparation | Staging host / container logs |
+| `qa-overwatch` | QA Overwatch | standard tier | All | Auditing PRs and validating test runs | Built-in messaging / `AGENT_BUS.md` |
+| `dev-lead` | Lead Developer | standard tier | `WS-01` | Implementing core business logic | Branch `feat/core-logic` |
+| `dev-worker-1` | Sub-Developer | economy tier | `WS-02` | Writing unit tests and edge cases | Branch `fix/edge-cases` |
+| `deploy-ops` | Deploy Specialist | standard tier | `WS-01` | Staging deployment preparation | Staging host / container logs |
 
 ---
 

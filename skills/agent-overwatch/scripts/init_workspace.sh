@@ -30,7 +30,7 @@ Options:
                    Uses child subproject handoff format linking back to the parent
                    HANDOFF.md, and prints a reminder to update the parent index.
   --no-bus         Skip scaffolding AGENT_BUS.md (used when native agent messaging,
-                   e.g., Antigravity swarm or host message board, supersedes file-bus).
+                   e.g., a swarm or host message board, supersedes file-bus).
   --force          Overwrite existing files if they already exist (default: skip safely).
   --dry-run        Print planned actions safely without creating or modifying any files.
   -h, --help       Show this help message and exit.
@@ -206,7 +206,7 @@ get_fallback_agent_bus() {
   cat <<'EOF'
 # AGENT_BUS — Inter-Agent Coordination Log
 
-> **Supersession Rule:** When your runtime provides a built-in message board or native agent-to-agent messaging tool (for example, Antigravity `swarm` `post_message` / `read_board`, `send_message`, or agent teams), use that native channel for live coordination. Use `AGENT_BUS.md` when no native board exists or when a Git-committed file-based audit trail is explicitly required.
+> **Supersession Rule:** When your runtime provides a built-in message board or native agent-to-agent messaging tool (for example a swarm message board, a `send_message` tool, or agent teams), use that native channel for live coordination. Use `AGENT_BUS.md` when no native board exists or when a Git-committed file-based audit trail is explicitly required.
 >
 > **Append-Only Discipline:** Read the tail before writing, then append with `scripts/bus_append.sh` (for example `echo '- body' | bus_append.sh --from dev-1 --to qa-1 --type RESULT --subject 'feat/x ready' --ref auto`). It stamps the UTC time, appends atomically and refuses bodies that match secret patterns. Only when that script is unavailable, fall back to a quoted heredoc (`cat <<'EOF' >> AGENT_BUS.md`), so parallel agents never clobber concurrent entries.
 >
