@@ -6,10 +6,10 @@
 
 A cross-platform multi-agent workflow skill: parallel lanes, independent QA, atomic branches, HANDOFF/AGENT_BUS coordination. Ships agent roles, scripts, an installer and a Claude Code plugin.
 
-## 2. Current State (2026-11-16 02:44 UTC)
+## 2. Current State (2026-11-16 03:16 UTC)
 
-- Remote: https://github.com/llathrop/agent-overwatch. `main` = `0214911` (all PRs through #15 merged; no open feature branches).
-- Host suites pass on `main` (`./install.sh --check-build` OK): `tests/test_verify_and_bus.sh` 48/0, `tests/test_watch_and_lease.sh` 124/0, `tests/test_install.sh` 127/0.
+- Remote: https://github.com/llathrop/agent-overwatch. `main` = `4cabec5` (PRs #3–#16 merged); branch `feat/authorize-model-tiering` open for Issue #18.
+- Host suites pass (`./install.sh --check-build` OK): `tests/test_verify_and_bus.sh` 48/0, `tests/test_watch_and_lease.sh` 124/0, `tests/test_install.sh` 133/0.
 - Process gap on record: PR #2 merged 2026-11-15 23:38 UTC with no bus QA verdict. The branch-bound gate (PR #6) now blocks this.
 
 ## 3. Landed Batches — what merged
@@ -24,7 +24,8 @@ A cross-platform multi-agent workflow skill: parallel lanes, independent QA, ato
 | #8–#11 | `0fbf4cd`, `caa77ea`, `b20e6f0`, `72da802` | Review-batch handoff (#8), tool-neutral core (#9), bus sync (#10), `AGENT_BUS.md` local/git-ignored (`HANDOFF.md` tracked, #11) |
 | #14 | `597ccb2` (`fix/lease-wait-cap@93a90c6e21e3`) | Capped `AO_LEASE_LOCK_WAIT` at `3600`s (overflow-safe) and ignored `status/coordinator.lease*` |
 | #15 | `0214911` (`feat/verify-antigravity-adapter@2713d30bff94`) | Verified Antigravity `tools:` in `install.sh` / `dist/antigravity/agents/*.md`, read-only QA/research tools, `--link` note & docs |
-| #16 | `docs/handoff-sync` (pending QA) | Synced HANDOFF through PR #15 and codified QA logic/direction-only boundary (QA reviews diffs & posted evidence; never runs tests/probes) |
+| #16 | `4cabec5` (`docs/handoff-sync@7306a1f230ee`) | Synced HANDOFF through PR #15 and codified QA logic/direction-only boundary (QA reviews diffs & posted evidence; never runs tests/probes) |
+| #18 | `feat/authorize-model-tiering` (pending QA) | Explicit user authorization for per-subagent model tiering (`flash_lite`/`flash`/`pro`, fallback `inherit`) in pointers, SKILL.md, docs & tests |
 
 - QA HOLDs caught before merge: bash 3.2 breakage (×3), lock races without flock, manifest paths escaping target, spoofed verdict headers, stale locks, omitted Antigravity `tools:`.
 - Environment notes: this host's `mkdir` is uutils 0.10.0 (not atomic under races); BusyBox `flock` lacks `-w`.

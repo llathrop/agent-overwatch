@@ -120,7 +120,7 @@ Match model cost and reasoning depth to the cognitive risk of each role. Tiers a
 | **Standard** | Balanced general-purpose | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks |
 | **Frontier** | Strongest reasoning available | **Mandatory `qa-agent` overwatch**, subtle debugging, security audits, complex `research-agent` architecture |
 
-**Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable, restricted by platform/orchestrator policy (for example, inherit-only swarm workers), or blocked by quota, **run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
+**Authorization & Graceful Fallback Rule:** Activating `agent-overwatch` constitutes explicit user authorization to apply per-subagent model tiering (`invoke_subagent` `Model="flash_lite"` | `"flash"` | `"pro"`, or the active runtime's economy / standard / frontier selector). If tiered model selection is unsupported, restricted by platform/orchestrator policy (for example, inherit-only swarm mode without user model selection), or blocked by quota, **gracefully fall back to `inherit` / the default model** across all agents. Never stall waiting on a specific tier when the default model is healthy.
 
 **Usage & budget awareness:**
 
