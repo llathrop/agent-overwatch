@@ -52,6 +52,8 @@ Options:
   -h, --help   Show this help.
 
 Lease file keys: id, since, last_seen (UTC), ttl_min, last_seen_epoch.
+Environment: AO_LEASE_LOCK_WAIT seconds to wait for the lease lock (default 10;
+             applies to flock and the no-flock fallback). On timeout: exit 1.
 EOF
 }
 
@@ -164,7 +166,9 @@ append_takeover() { # $1 previous id, $2 previous last_seen, $3 live|expired
   local header
   header="### [$(now_ts)] ${ID} -> all | TAKEOVER coordinator lease"
   {
-    if command -v flock >/dev/null 2>&1; then flock -x 9; fi
+    if command -v flock >/dev/null 2>&1; then
+      flock_bounded 9 || { echo "[ERROR] lease taken, but timed out after ${LOCK_WAIT}s waiting for the lock on $BUS; TAKEOVER not recorded" >&2; exit 1; }
+    fi
     {
       printf '\n%s\n%s\n' "$header" "$body"
       cat <<'EOF'
@@ -231,10 +235,22 @@ do_release() {
 # else an exclusive-create lock file (<file>.excl.lock, bash noclobber = O_EXCL)
 # with a bounded wait and stale reaping. The mkdir command is not used: some
 # coreutils builds (e.g. uutils mkdir) are not atomic under races.
-LOCK_WAIT="${AO_LEASE_LOCK_WAIT:-10}"    # seconds to wait for the lock
+LOCK_WAIT="${AO_LEASE_LOCK_WAIT:-10}"    # seconds to wait for the lock (flock or fallback)
+[[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || die_usage "AO_LEASE_LOCK_WAIT must be a non-negative integer (seconds)"
 LOCK_STALE=300                           # a lock older than this is stale even if its pid lives
 LOCK_F=""
 OWN_LOCK=false
+
+# Bounded flock: poll "flock -n" until a deadline. BusyBox flock has no -w, but
+# util-linux and BusyBox both support -n. Returns 1 on timeout.
+flock_bounded() { # $1 = fd
+  local deadline
+  deadline=$(( $(now_epoch) + LOCK_WAIT ))
+  until flock -n -x "$1" 2>/dev/null; do
+    (( $(now_epoch) < deadline )) || return 1
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+}
 
 # O_EXCL create with "<pid> <epoch>" as content; fails if the file exists.
 excl_create() { # $1 = path
@@ -321,7 +337,10 @@ run_locked() {
     mkdir -p "$dir" || exit 1
     if command -v flock >/dev/null 2>&1; then
       exec 8> "${FILE}.lock" || exit 1
-      flock -x 8
+      flock_bounded 8 || {
+        echo "[ERROR] timed out after ${LOCK_WAIT}s waiting for lock ${FILE}.lock (another lease command holds it; retry, or find the stuck process)" >&2
+        exit 1
+      }
     else
       acquire_excl_lock
     fi
