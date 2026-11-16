@@ -55,12 +55,12 @@ A scope is required (`--global`, or `--workspace DIR` or a bare `DIR`). The inst
 
 ```bash
 git clone https://github.com/llathrop/agent-overwatch ~/src/agent-overwatch
-~/src/agent-overwatch/install.sh --codex --antigravity --gemini --global --link
+~/src/agent-overwatch/install.sh --codex --gemini --global --link
 # later
 git -C ~/src/agent-overwatch pull
 ```
 
-- **Skill directories** are symlinked to `skills/agent-overwatch/` in the clone, so a `git pull` updates them right away.
+- **Skill directories** are symlinked to `skills/agent-overwatch/` in the clone, so a `git pull` updates them right away on runtimes that follow symlinks (documented for Codex; **skipped by Antigravity** — use default copy mode for Antigravity).
 - **Agent files** can't link straight to `agents/*.md`, because each platform needs different frontmatter. `./install.sh --build` generates them into the committed [dist/](dist/) directory (`dist/claude/agents/*.md`, `dist/antigravity/agents/*.md`, `dist/codex/agents/*.toml`), and `--link` links to those files. **After a pull that changes `agents/*.md`, re-run `./install.sh --build` in the clone**, unless the pull already included the rebuilt `dist/`. `--link` refuses to run while `dist/` is stale. `./install.sh --check-build` exits 1 when `dist/` is out of date, and `tests/test_install.sh` checks this too.
 - **Instruction-file blocks** are copied text, which is why they are kept as minimal pointers that rarely change. Re-run with `--force` to refresh them.
 - **Cursor rules and GitHub templates** are always copied. They live inside your project repository, where an absolute symlink into your clone would get committed by mistake.
@@ -70,17 +70,17 @@ git -C ~/src/agent-overwatch pull
 
 | Target | `--global` | `--workspace DIR` | Verified against |
 | :- | :- | :- | :- |
-| Antigravity | `~/.gemini/config/plugins/agent-overwatch/` (`plugin.json`, `skills/`, `agents/`) | `DIR/.agents/skills/agent-overwatch/`, `DIR/.agents/agents/*.md` | [plugins](https://antigravity.google/docs/plugins.md), [build plugins](https://antigravity.google/docs/build-plugins.md), [skills](https://antigravity.google/docs/skills.md), [subagents](https://antigravity.google/docs/subagents.md) |
+| Antigravity | `~/.gemini/config/plugins/agent-overwatch/` (`plugin.json`, `skills/`, `agents/`) | `DIR/.agents/skills/agent-overwatch/`, `DIR/.agents/agents/*.md` | [plugins](https://antigravity.google/docs/plugins.md), [build plugins](https://antigravity.google/docs/build-plugins.md), [skills](https://antigravity.google/docs/skills.md), [subagents](https://antigravity.google/docs/subagents.md), live `GetAllPlugins` & built-in `migrate-agent-settings` |
 | Claude Code | `~/.claude/skills/agent-overwatch/`, `~/.claude/agents/*.md`, `~/.claude/CLAUDE.md` | `DIR/.claude/skills/…`, `DIR/.claude/agents/*.md`, `DIR/CLAUDE.md` | [subagents](https://code.claude.com/docs/en/sub-agents) |
 | Codex | `~/.agents/skills/agent-overwatch/`, `~/.codex/agents/*.toml`, `~/.codex/AGENTS.md` | `DIR/.agents/skills/…`, `DIR/.codex/agents/*.toml`, `DIR/AGENTS.md` | [skills](https://learn.chatgpt.com/docs/build-skills), [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) |
 | Gemini CLI | `~/.gemini/commands/agent-overwatch.toml`, `~/.gemini/GEMINI.md` | `DIR/.gemini/commands/…`, `DIR/GEMINI.md` | [custom commands](https://geminicli.com/docs/cli/custom-commands/), [GEMINI.md](https://geminicli.com/docs/cli/gemini-md/) |
 | Cursor | n/a | `DIR/.cursor/rules/agent-overwatch.mdc` | |
 | GitHub | n/a | `DIR/.github/ISSUE_TEMPLATE/atomic_task.md`, `DIR/.github/PULL_REQUEST_TEMPLATE.md` | |
 
-Paths checked against those pages on 2026-11-15. Earlier versions of this installer used `~/.codex/skills` and `.codex/skills`, which Codex does not scan; Codex reads skills from `.agents/skills`. Two things are not verified:
+Paths and Antigravity runtime behavior verified on 2026-11-15. Earlier versions of this installer used `~/.codex/skills` and `.codex/skills`, which Codex does not scan; Codex reads skills from `.agents/skills`. Key runtime findings:
 
-- **Antigravity agent `tools:`** The installer omits it from generated Antigravity agents. The documented built-in tool names disagree between pages, and the docs warn that an unknown name can hang a subagent. With `tools:` omitted the agent gets all tools, so `qa-agent` and `research-agent` stay read-only only because their prompts say so.
-- **Symlinked skill folders** are documented for Codex. For Claude Code and Antigravity they are expected to work but not documented.
+- **Antigravity agent `tools:` (verified against live `GetAllPlugins` and built-in `migrate-agent-settings`):** Omitting `tools:` falls back to a 5-tool default (`send_message`, `view_file`, `search_web`, `schedule`, `generate_image`) lacking `run_command`, `edit_file`, `write_file`, and `manage_task`. Generated [dist/antigravity/agents/](dist/antigravity/agents/) files therefore emit explicit YAML `tools:` lists: `qa-agent` and `research-agent` receive `read_file`, `run_command`, and `search_web` (plus `send_message`), enforcing read-only behavior at the tool layer without `edit_file` or `write_file`, while `dev-agent` and `deploy-agent` receive `read_file`, `edit_file`, `write_file`, `run_command`, `manage_task`, and `search_web` (plus `send_message`).
+- **Symlinked folders (`--link`):** Documented for Codex. Live `GetAllPlugins` checks confirmed Antigravity's customization scanner skips symlinked plugin directories, skill directories, and markdown files (`skills: []`, `agents: []`), so always use copy mode (omit `--link`) for Antigravity installs. Claude Code symlinked skill folders remain unverified; prefer Claude Code's native marketplace plugin install above.
 
 ### Initialize and verify
 

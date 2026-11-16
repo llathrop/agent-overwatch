@@ -67,6 +67,24 @@ for f in sorted(d.glob("*.md")):
         assert not {"Edit", "Write"} & set(names), f
     assert re.search(r"^name: \S+$", fm, re.M) and re.search(r"^description: ", fm, re.M), f
 PY
+check "Antigravity agents: YAML tools list; qa/research have no edit_file/write_file" python3 - "$REPO" <<'PY'
+import pathlib, re, sys
+d = pathlib.Path(sys.argv[1]) / "dist/antigravity/agents"
+allowed = {"read_file", "edit_file", "write_file", "run_command", "manage_task", "search_web"}
+for f in sorted(d.glob("*.md")):
+    fm = re.match(r"^---\n(.*?)\n---\n", f.read_text(), re.S).group(1)
+    assert re.search(r"^name: \S+$", fm, re.M) and re.search(r"^description: ", fm, re.M), f
+    assert re.search(r"^subagent: true$", fm, re.M), f
+    assert re.search(r"^mainAgent: false$", fm, re.M), f
+    m = re.search(r"^tools:\n((?:  - \S+\n?)+)", fm, re.M)
+    assert m, f"Missing YAML tools list in {f}"
+    names = [line.strip()[2:].strip() for line in m.group(1).strip().splitlines()]
+    assert names and set(names) <= allowed, (f, names)
+    if "qa" in f.name or "research" in f.name:
+        assert not {"edit_file", "write_file"} & set(names), (f, names)
+    else:
+        assert {"edit_file", "write_file"} <= set(names), (f, names)
+PY
 check "Codex agents are valid TOML with required keys" python3 - "$REPO" <<'PY'
 import pathlib, sys, tomllib
 for f in (pathlib.Path(sys.argv[1]) / "dist/codex/agents").glob("*.toml"):
