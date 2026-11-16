@@ -8,7 +8,11 @@ In Antigravity, multi-agent workflows leverage native subagent orchestration, ev
 
 ## 1. Directory Structure
 
-You can install `agent-overwatch` at either the **workspace scope** (recommended for project-specific team configurations) or as a **global plugin** available across all workspaces.
+You can install `agent-overwatch` at either the **workspace scope** (recommended for project-specific team configurations) or as a **global plugin** available across all workspaces: `./install.sh --antigravity --workspace DIR` or `./install.sh --antigravity --global`. Add `--link` to symlink the skill and generated agents to your clone so `git pull` updates them.
+
+Paths (verified 2026-11-15): global plugins live in `~/.gemini/config/plugins/<plugin>/` with `plugin.json`, `skills/`, and `agents/` ([plugins](https://antigravity.google/docs/plugins.md), [build plugins](https://antigravity.google/docs/build-plugins.md)); workspace skills in `.agents/skills/` ([skills](https://antigravity.google/docs/skills.md)); workspace agents in `.agents/agents/<name>.md` ([subagents](https://antigravity.google/docs/subagents.md)).
+
+**Unverified: agent `tools:` names.** The docs don't publish one consistent list of built-in tool names (the subagents page shows `view_file`, `grep_search`, `run_command`; the SDK lists others), and an unknown name can hang a subagent. The installed agents (generated into `dist/antigravity/agents/`) therefore omit `tools:`, which means all tools; QA and research stay read-only by prompt. The `tools:` lists in the illustrative examples below use the portable names from `agents/*.md` and are not verified Antigravity identifiers.
 
 ### Workspace Scope Layout
 ```text

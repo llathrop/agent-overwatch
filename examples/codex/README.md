@@ -6,23 +6,25 @@ This directory provides the configuration setup for using **Agent Overwatch** wi
 
 ## 1. Directory & File Structure
 
-Codex CLI supports global and project-level instructions, skills, and prompts.
+Codex CLI supports global and project-level instructions, skills, and custom agents. Install with `./install.sh --codex --global` or `--workspace DIR`; add `--link` to symlink the skill and agents to your clone so `git pull` updates them.
+
+Paths (verified 2026-11-15): skills are scanned from `.agents/skills` (repo, from the working directory up to the repo root) and `~/.agents/skills` (user), not `~/.codex/skills` ([skills](https://learn.chatgpt.com/docs/build-skills)); custom agents are TOML files in `~/.codex/agents/` or `.codex/agents/` ([subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)); instructions come from `~/.codex/AGENTS.md` (or `$CODEX_HOME`) and project `AGENTS.md` files ([AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)).
 
 ```text
+~/.agents/skills/agent-overwatch/         # User skill (SKILL.md, references/, templates/, scripts/)
 ~/.codex/                                 # Global user scope
 ├── config.toml                           # Codex CLI runtime settings & MCP servers
-├── AGENTS.md                             # Global instructions
-└── skills/
-    └── agent-overwatch/
-        ├── SKILL.md                      # Codex-compatible skill definition
-        └── templates/
-            ├── HANDOFF.template.md
-            ├── SUBDIR_HANDOFF.template.md
-            ├── AGENT_BUS.template.md
-            └── QA_CHECKLIST.template.md
+├── AGENTS.md                             # Short agent-overwatch pointer only (global)
+└── agents/                               # Generated from agents/*.md (dist/codex/agents/*.toml)
+    ├── qa-agent.toml
+    ├── dev-agent.toml
+    ├── deploy-agent.toml
+    └── research-agent.toml
 
 <project-root>/                           # Project workspace scope
-├── AGENTS.md                             # Project-level Overwatch instructions
+├── AGENTS.md                             # Project-level Overwatch instructions (full rules)
+├── .agents/skills/agent-overwatch/       # Project skill
+├── .codex/agents/*.toml                  # Project custom agents
 ├── HANDOFF.md                            # Living repository handoff
 ├── services/
 │   └── api/
@@ -32,7 +34,7 @@ Codex CLI supports global and project-level instructions, skills, and prompts.
 
 ---
 
-## 2. Skill Definition (`~/.codex/skills/agent-overwatch/SKILL.md`)
+## 2. Skill Definition (`~/.agents/skills/agent-overwatch/SKILL.md`)
 
 ```markdown
 ---
@@ -56,7 +58,7 @@ Enforces strict engineering standards:
 Codex CLI applies instruction files hierarchically based on the current working directory:
 
 1. **Global Instructions (`~/.codex/AGENTS.md`):**
-   - Establishes global developer identity, default safety constraints, and base QA requirements across all projects.
+   - Establishes global developer identity and defaults across all projects. The installer adds only a pointer here ("when a task is multi-agent, load the agent-overwatch skill"), never workspace rules.
 2. **Project Root (`<project-root>/AGENTS.md`):**
    - Tailors rules to the project: points to root `HANDOFF.md`, specifies local test runners (`pytest`, `npm test`, `cargo test`), and defines the integration branch (`main`).
 3. **Subdirectory Overrides (`<project-root>/services/api/AGENTS.md`):**
