@@ -25,7 +25,8 @@ Usage:
   bus_append.sh --from ROLE --to LIST --type TYPE --subject TEXT \
                 [--ref auto|BRANCH@SHA] [--bus PATH] [--repo DIR] < body.txt
 
-Writes, atomically (flock when available, else an O_EXCL <bus>.lock file):
+Writes, atomically (flock when available, else an O_EXCL <bus>.lock file whose
+holder is recovered if its pid is dead or it is older than 60s):
 
   ### [YYYY-MM-DD HH:MM:SS UTC] <from> -> <to> | <TYPE> [<branch>@<sha>] <subject>
   <body read from stdin; may be empty>
@@ -44,9 +45,15 @@ Options:
   -h, --help        Show this help
 
 The UTC timestamp is stamped automatically. The entry is refused (exit 2) if the
-subject or body matches a secret pattern; only the line number is reported.
+subject or body matches a secret pattern (only the line number is reported), or
+if a body line starts with a Markdown heading marker ("# ", "## ", "###...")
+that could forge an entry header such as a QA verdict.
 
-Exit codes: 0 written, 1 usage / IO error, 2 refused (secret pattern detected).
+Environment: BUS_APPEND_LOCK_WAIT (default 30s), BUS_APPEND_LOCK_STALE (60s),
+BUS_APPEND_NO_FLOCK=1 (force the lockfile fallback).
+
+Exit codes: 0 written, 1 usage / IO / lock timeout, 2 refused (secret or
+forged-header pattern detected).
 EOF
 }
 
@@ -148,9 +155,19 @@ PW_PLACEHOLDER='(\{\{|\}\}|<.*>|TODO|CHANGEME|example|placeholder|dummy|sample|y
 
 TMP="$(mktemp -d)"
 LOCK_FILE=""
+LOCK_TOKEN=""
+# Remove the lockfile only if it still holds our token (never someone else's)
+release_lock() {
+  if [[ -n "$LOCK_FILE" && "$(cat -- "$LOCK_FILE" 2>/dev/null || true)" == "$LOCK_TOKEN" ]]; then
+    rm -f -- "$LOCK_FILE"
+  fi
+  LOCK_FILE=""
+}
+BREAK_FILE=""
 cleanup() {
   rm -rf "$TMP"
-  if [[ -n "$LOCK_FILE" ]]; then rm -f "$LOCK_FILE"; fi
+  release_lock
+  if [[ -n "$BREAK_FILE" ]]; then rm -f -- "$BREAK_FILE"; fi
 }
 trap cleanup EXIT
 
@@ -178,6 +195,22 @@ if [[ -n "$hits" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Header-injection refusal: a body line that looks like a Markdown heading
+# (^#{1,6} + space, or anything starting "###") could be parsed as a bus entry
+# header, e.g. a STATUS that pastes a forged "| QA APPROVE <branch>@<sha>" line.
+# -----------------------------------------------------------------------------
+if [[ -n "$BODY" ]]; then
+  hdr_hits="$(printf '%s\n' "$BODY" | grep -n -E -e '^(#{1,6}([[:space:]]|$)|###)' | cut -d: -f1 || true)"
+  if [[ -n "$hdr_hits" ]]; then
+    while IFS= read -r n; do
+      [[ -n "$n" ]] && echo "[REFUSED] Body line ${n} starts with a Markdown heading marker ('#'); it could forge a bus entry header." >&2
+    done <<< "$hdr_hits"
+    echo "[REFUSED] Nothing was written to $BUS. Indent the line, quote it in backticks, or drop the leading '#'." >&2
+    exit 2
+  fi
+fi
+
+# -----------------------------------------------------------------------------
 # Atomic append (timestamp taken inside the lock so entries are ordered)
 # -----------------------------------------------------------------------------
 write_entry() {
@@ -200,22 +233,92 @@ HEADER_WRITTEN=""
 exec 9>>"$BUS"
 # BUS_APPEND_NO_FLOCK=1 forces the lockfile fallback (used by tests)
 if [[ "${BUS_APPEND_NO_FLOCK:-0}" != 1 ]] && command -v flock >/dev/null 2>&1; then
-  flock -x -w 30 9 || die "Timed out waiting for lock on $BUS"
+  flock -x -w "${BUS_APPEND_LOCK_WAIT:-30}" 9 || die "Timed out waiting for lock on $BUS"
   write_entry
 else
-  # O_EXCL lockfile (bash noclobber). mkdir-based locks were observed to admit
-  # several holders at once in some sandboxed environments; O_EXCL create did not.
+  # Fallback: O_EXCL lockfile created by bash noclobber (open(2) O_CREAT|O_EXCL),
+  # holding "<pid> <epoch> <nonce>". This deliberately avoids the external
+  # mkdir(1) binary: mkdir(2) is atomic, but the uutils coreutils 0.10.0 mkdir
+  # binary (installed as the system coreutils on some hosts) was observed to let
+  # several racing callers "succeed", admitting multiple lock holders. Do not
+  # revert to `mkdir "$lock"` without re-running the concurrency tests.
+  #
+  # A lock whose pid is dead, or that is older than BUS_APPEND_LOCK_STALE
+  # seconds (default 60), or that stays empty/malformed for ~2s, is broken by
+  # an atomic rename (mv -> rename(2)) and re-checked before deletion.
+  # Known limit: breaking a live holder that is merely older than the stale
+  # threshold can race with its own release in a microsecond window.
   lock="${BUS}.lock"
+  stale_secs="${BUS_APPEND_LOCK_STALE:-60}"
+  wait_secs="${BUS_APPEND_LOCK_WAIT:-30}"
+  [[ "$stale_secs" =~ ^[0-9]+$ && "$wait_secs" =~ ^[0-9]+$ ]] || die "BUS_APPEND_LOCK_STALE / BUS_APPEND_LOCK_WAIT must be integers"
+  max_tries=$((wait_secs * 10))
+
+  pid_alive() {
+    kill -0 "$1" 2>/dev/null && return 0
+    # kill -0 also fails with EPERM for another user's live process
+    command -v ps >/dev/null 2>&1 && ps -p "$1" >/dev/null 2>&1 && return 0
+    return 1
+  }
+  # Breakers are serialized by "<lock>.break" (also O_EXCL) and re-read the lock
+  # immediately before renaming it, so a waiter acting on an old view cannot
+  # steal a lock that a live process has just acquired.
+  break_stale_lock() { # $1 = content we judged stale
+    local brk="${lock}.break" moved="${lock}.stale.$$" bpid
+    if ! ( set -o noclobber; printf '%s\n' "$$" > "$brk" ) 2>/dev/null; then
+      # Another breaker is active; clear it only if that breaker died
+      bpid="$(cat -- "$brk" 2>/dev/null || true)"
+      if [[ "$bpid" =~ ^[0-9]+$ ]] && ! pid_alive "$bpid"; then rm -f -- "$brk"; fi
+      return 0
+    fi
+    BREAK_FILE="$brk"
+    if [[ "$(cat -- "$lock" 2>/dev/null || true)" == "$1" ]] && mv -f -- "$lock" "$moved" 2>/dev/null; then
+      if [[ "$(cat -- "$moved" 2>/dev/null || true)" == "$1" ]]; then
+        echo "[WARN] Broke stale lock $lock (holder: ${1:-<empty>})" >&2
+      else
+        # Lost a microsecond race: put the fresh lock back if the slot is free
+        ( set -o noclobber; cat -- "$moved" > "$lock" ) 2>/dev/null || true
+      fi
+      rm -f -- "$moved"
+    fi
+    rm -f -- "$brk"
+    BREAK_FILE=""
+  }
+
   tries=0
-  until ( set -o noclobber; printf '%s\n' "$$" > "$lock" ) 2>/dev/null; do
+  same_bad=0
+  last_bad=""
+  while :; do
+    LOCK_TOKEN="$$ $(date +%s) ${RANDOM}${RANDOM}"
+    if ( set -o noclobber; printf '%s\n' "$LOCK_TOKEN" > "$lock" ) 2>/dev/null; then
+      break
+    fi
     tries=$((tries + 1))
-    [[ "$tries" -lt 300 ]] || die "Timed out waiting for lock $lock (remove it if stale)"
+    [[ "$tries" -le "$max_tries" ]] || die "Timed out after ${wait_secs}s waiting for lock $lock (holder: $(cat -- "$lock" 2>/dev/null || echo '?'))"
+    content="$(cat -- "$lock" 2>/dev/null || true)"
+    if [[ "$content" =~ ^([0-9]+)\ ([0-9]+)(\ |$) ]]; then
+      same_bad=0
+      holder_pid="${BASH_REMATCH[1]}"
+      holder_ts="${BASH_REMATCH[2]}"
+      if ! pid_alive "$holder_pid" || (( $(date +%s) - holder_ts > stale_secs )); then
+        break_stale_lock "$content"
+        continue
+      fi
+    elif [[ -e "$lock" ]]; then
+      # Empty or malformed: the holder may be mid-write; break only if it persists
+      if [[ "$content" == "$last_bad" ]]; then same_bad=$((same_bad + 1)); else same_bad=0; fi
+      last_bad="$content"
+      if [[ "$same_bad" -ge 20 ]]; then
+        break_stale_lock "$content"
+        same_bad=0
+        continue
+      fi
+    fi
     sleep 0.1
   done
   LOCK_FILE="$lock"
   write_entry
-  rm -f "$LOCK_FILE"
-  LOCK_FILE=""
+  release_lock
 fi
 exec 9>&-
 

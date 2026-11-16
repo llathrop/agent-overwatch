@@ -25,6 +25,7 @@ Closes #<!-- Issue Number -->
 ### 3. Secret & Credential Scan and Pre-Merge Gate
 - [ ] Verified zero API keys, passwords, bearer tokens, or sensitive host credentials in the final files **and** in every commit on the branch.
 - **Command:** `./skills/agent-overwatch/scripts/verify_atomic_branch.sh --repo . --base main --qa-file AGENT_BUS.md`
+  <!-- Path shown is relative to the agent-overwatch repo. In an installed project, use the path where the skill was installed (e.g. ~/.claude/skills/agent-overwatch/scripts/). -->
 - **Result:** `<!-- paste the gate summary; must end in [ALL CHECKS PASSED] -->`
 
 ---

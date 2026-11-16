@@ -9,7 +9,7 @@
 
 1. **STRICTLY APPEND-ONLY, VIA `bus_append.sh`:**
    - Never edit, overwrite, reorder, or delete existing entries. All agents append new entries at the bottom of the log.
-   - Append with `skills/agent-overwatch/scripts/bus_append.sh`, never by hand-typing headers. It stamps the UTC time (with seconds) automatically, resolves `--ref auto` to `<branch>@<sha12>`, appends atomically (flock, or an O_EXCL lockfile), validates the entry type, and refuses (exit 2) any subject/body that matches a secret pattern (reporting the line number only):
+   - Append with `skills/agent-overwatch/scripts/bus_append.sh`, never by hand-typing headers. It stamps the UTC time (with seconds) automatically, resolves `--ref auto` to `<branch>@<sha12>`, appends atomically (flock, or an O_EXCL lockfile that is recovered when its holder pid is dead or it is older than 60s), validates the entry type, and refuses (exit 2) any subject/body that matches a secret pattern (reporting the line number only) or any body line starting with a Markdown heading marker (`# `, `## `, `###...`), because such a line could forge an entry header such as a QA verdict. Indent such lines or wrap them in backticks:
      ```bash
      ./skills/agent-overwatch/scripts/bus_append.sh --bus AGENT_BUS.md \
        --from dev-1 --to qa-1,coordinator --type RESULT \
