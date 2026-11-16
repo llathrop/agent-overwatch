@@ -6,13 +6,23 @@ Guidelines for matching model capability to task risk, scaling workers horizonta
 
 ## 1. Model Tiering Matrix
 
-Use cheaper/faster models for mechanical tasks and reserve high-reasoning frontier models for architecture, hard debugging, and independent QA — **when the active platform allows per-agent model selection**.
+Use cheaper/faster models for mechanical tasks and reserve high-reasoning frontier models for architecture, hard debugging, and independent QA, **when the active platform allows per-agent model selection**. Tiers are defined by capability, not by vendor.
 
-| Tier | Example Model Classes | Assigned Tasks & Roles | Why |
+| Tier | Capability | Assigned Tasks & Roles | Why |
 | --- | --- | --- | --- |
-| **Economy / Fast** | `flash_lite`, `flash`, `haiku`, `mini` | File/tree inventories, log filtering, formatting/lint cleanup, boilerplate test stubs, quick status summarization | High token throughput, low latency and cost on deterministic/low-risk operations |
-| **Standard** | `sonnet`, `pro`, `gpt-4o` | Routine `dev-agent` feature slices, unit tests, reference docs, standard `deploy-agent` checklist execution | Balanced reasoning, code fluency, and cost for well-scoped specifications |
-| **Frontier / Reasoning** | `opus`, `pro` (high reasoning), `o3` | **Mandatory `qa-agent` overwatch**, security/concurrency reviews, complex `research-agent` root-cause debugging, subtle architectural design | Maximizes defect catch rate before code merges or infrastructure mutates |
+| **Economy** | Small, fast, low-cost models | File/tree inventories, log filtering, formatting/lint cleanup, boilerplate test stubs, quick status summarization | High token throughput, low latency and cost on deterministic/low-risk operations |
+| **Standard** | Balanced general-purpose models | Routine `dev-agent` feature slices, unit tests, reference docs, standard `deploy-agent` checklist execution, routine QA re-reviews of small, low-risk diffs | Balanced reasoning, code fluency, and cost for well-scoped specifications |
+| **Frontier** | Strongest available reasoning models | **Mandatory `qa-agent` overwatch for high-risk audits**, security/concurrency reviews, complex `research-agent` root-cause debugging, subtle architectural design | Maximizes defect catch rate before code merges or infrastructure mutates |
+
+**QA tier rule:** QA runs on the frontier tier for high-risk audits (security, concurrency, data migration, infrastructure mutation, first review of a new branch) and may run on the standard tier for routine re-reviews (re-checking a small fix after a HOLD). Independence still applies at every tier: QA never reviews its own work. This QA cost rule is a **proposal until adopted** by the project; until then, run QA on the strongest tier available.
+
+**Vendor examples (illustrative only, not requirements; map to whatever your runtime offers):**
+
+| Tier | Examples |
+| --- | --- |
+| Economy | Claude Haiku, Gemini Flash / Flash-Lite, GPT mini-class |
+| Standard | Claude Sonnet, Gemini Pro, GPT-4o-class |
+| Frontier | Claude Opus, Gemini Pro (high reasoning), OpenAI o-series |
 
 ---
 
@@ -20,7 +30,7 @@ Use cheaper/faster models for mechanical tasks and reserve high-reasoning fronti
 
 Tiered routing is an optimization, **never a blocker**. Immediately fall back to running all agents on the **default / inherited model** whenever ANY of these conditions holds:
 
-1. **Tool/Runtime Restriction:** The environment has no per-subagent `model` selector, or platform rules require inheriting the parent's model (e.g., Antigravity Swarm inherit-only mode unless the user explicitly specifies models).
+1. **Tool/Runtime Restriction:** The environment has no per-subagent `model` selector, or platform rules require inheriting the parent's model (for example, a swarm runtime in inherit-only mode unless the user explicitly specifies models).
 2. **User Preference:** The user requests a specific uniform model for the session.
 3. **Quota / Capacity / Availability:** A tier returns rate-limit/quota exhaustion or is unavailable for an account.
 

@@ -150,9 +150,20 @@ The Coordinator bridges parallel agent execution and the human user. Never go si
 
 ---
 
-## 4. Installer & Platform Tool Mapping
+## 4. QA Permissions Recipe (Enforce Read-Only)
 
-The subagent definitions under `agents/*.md` use Antigravity's native plugin frontmatter (`subagent: true`, `mainAgent: false`, `tools: [...]`) alongside **tool-neutral system prompt instructions** in the Markdown body so any installer or runtime can adapt the frontmatter cleanly without rewriting the role logic.
+A prompt that says "read-only" is enforced only by the model following it. Use the runtime's own controls as well:
+
+- **Tool lists:** give the QA and research agents a tool set with no edit, write or notebook-edit tools (read, search, and a verification shell only). Because a shell can still write, add entries to your runtime's permission allowlist for the specific read-only commands QA needs (for example `git diff`, `git log`, the test runner, or a remote read such as `ssh host systemctl status`), and leave everything else to prompt or deny. The adapter reference below shows the per-tool syntax.
+- **Other controls:** sandbox or approval modes, per-agent tool lists, command allowlists.
+- **When QA is denied:** QA states which command was denied and verifies from the evidence that authors or deployers posted (command plus output, `file:line`). It never works around the denial with another tool or path.
+- **The coordinator** must not run denied commands on QA's behalf. If the evidence is not enough, ask the owning lane to post it, or ask the user to grant the permission.
+
+---
+
+## 5. Adapter reference (per tool)
+
+This section is tool-specific and optional. The role logic in sections 1 to 4 applies to any runtime. The subagent definitions under `agents/*.md` use Antigravity's native plugin frontmatter (`subagent: true`, `mainAgent: false`, `tools: [...]`) alongside **tool-neutral system prompt instructions** in the Markdown body so any installer or runtime can adapt the frontmatter cleanly without rewriting the role logic.
 
 | Portable Role File | Capability Scope | Antigravity Native (`agents/*.md`) | Claude Code (`~/.claude/agents/*.md`) | Codex / Gemini CLI / Cursor |
 | --- | --- | --- | --- | --- |
@@ -174,11 +185,4 @@ The subagent definitions under `agents/*.md` use Antigravity's native plugin fro
 
 ---
 
-## 5. QA Permissions Recipe (Enforce Read-Only)
-
-A prompt that says "read-only" is enforced only by the model following it. Use the runtime's own controls as well:
-
-- **Claude Code:** give the QA and research agents a `tools:` list without `Edit`, `MultiEdit`, `Write`, or `NotebookEdit` (the installer generates `Read, Glob, Grep, Bash, WebSearch, WebFetch`). Because `Bash` can still write, add permission allowlist entries in `.claude/settings.json` for the specific read-only commands QA needs (for example `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(pytest:*)`, or a remote read such as `Bash(ssh host systemctl status:*)`), and leave everything else to prompt or deny.
-- **Other runtimes:** use their equivalent (sandbox or approval modes, per-agent tool lists, command allowlists).
-- **When QA is denied:** QA states which command was denied and verifies from the evidence that authors or deployers posted (command plus output, `file:line`). It never works around the denial with another tool or path.
-- **The coordinator** must not run denied commands on QA's behalf. If the evidence is not enough, ask the owning lane to post it, or ask the user to grant the permission.
+**Claude Code QA permissions example:** the installer generates `tools: Read, Glob, Grep, Bash, WebSearch, WebFetch` for QA and research agents (no `Edit`, `MultiEdit`, `Write` or `NotebookEdit`). Allowlist read-only commands in `.claude/settings.json`, for example `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(pytest:*)`, or `Bash(ssh host systemctl status:*)`.

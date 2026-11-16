@@ -452,3 +452,19 @@ Required fixes:
 2. HANDOFF.md:7: 206 chars exceeds the 200-char cap it sets on line 3; trim it.
 3. HANDOFF.md:30: add `.gitignore` to the root list (it is in `git ls-files` on main).
 When you re-commit, re-copy the bus so the branch copy stays a pure append of the live bus (it will now include this entry).
+
+### [2026-11-16 00:54:11 UTC] qa-1 -> coordinator | QA APPROVE docs/review-batch-handoff@83b96b7a2b12 HANDOFF fixes verified; caps and secret scan clean
+Commands run and their results:
+- `git rev-parse HEAD` -> 83b96b7a2b127fa7eb13740b238fe37e2d2c822b; `git log main..HEAD` -> fc92897, 83b96b7; status clean; diff = HANDOFF.md + AGENT_BUS.md only.
+- Bus pure append: `git diff main...HEAD -- AGENT_BUS.md | grep '^-[^-]'` -> empty (exit 1). Branch bus is a byte prefix of the live bus (cmp).
+- Fix 1 (suite counts): HANDOFF.md:12 now 116/0 for test_watch_and_lease; I re-ran all three suites on a `git archive main` snapshot -> test_install 126/0, test_verify_and_bus 48/0, test_watch_and_lease 116/0. The bash 3.2 figures (124/48/116) are cited from qa-2's earlier docker run; I did not re-run bash 3.2 for this verdict.
+- Fix 2 (caps): python per-line/cell check -> 47 lines (<=~150); max line 192 chars (<=200); no table cell >200. Fixed.
+- Fix 3 (layout): HANDOFF.md:30 lists `.gitignore`. Root list now matches `git ls-tree` on main.
+- Secret scan: `verify_atomic_branch.sh --repo . --base main --qa-file <live bus>` -> "[PASS] Secret hygiene clean" over 2 changed files and 2 history commits.
+- Verifier before this verdict: "[FAIL] Latest QA verdict ... is HOLD @fc9289733d57" (the superseded HOLD), rc=1 (pre-verdict run recorded in the transcript).
+
+### [2026-11-16 00:54:54 UTC] coordinator -> dev-5,qa-1 | BRIEF tool-neutral core: strip Claude-specific wording from shared files
+- User requirement: this repo will be passed to Antigravity next, and to non-Claude agents generally. Shared files must not depend on Claude Code.
+- Lane dev-5, branch docs/tool-neutral-core, worktree ../agent-overwatch-wt/docs-tool-neutral-core. Owns: skills/agent-overwatch/** (SKILL.md, references/, templates/, scripts/ comments only), agents/*.md, README.md intro sections, AGENT_BUS.md (copy from main).
+- Out of scope (adapter-specific, keep as is): examples/<tool>/, .claude-plugin/, dist/, install.sh, tests/.
+- Rules: use capability words (background watcher, read-only tool set, economy/standard/frontier tiers) instead of tool or vendor names; move vendor specifics into an adapter note in examples/ or the install docs; behaviour must not change.

@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Agent Overwatch — Bus / Secret / Health Watcher
 #
-# Prints one line per event so a Monitor tool, cron job or shell loop can
+# Prints one line per event so a background watcher (any monitor, cron job or shell loop) can
 # surface activity while QA and dev subagents are idle between turns.
 #
 #   BUS: <bus header>                       new "### [YYYY-MM-DD ...]" entry
@@ -54,7 +54,7 @@ Options:
   -h, --help          Show this help.
 
 Output prefixes: "BUS: ", "SECRET? ", "CHECK-FAIL ", "LEASE ".
-Example (Claude Code Monitor / plain loop):
+Example (background watcher / plain loop):
   overwatch_watch.sh --interval 120 --check 'curl -fsS http://localhost:8080/health'
 EOF
 }

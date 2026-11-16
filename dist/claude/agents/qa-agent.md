@@ -23,7 +23,7 @@ Protect correctness, safety, and velocity by independently auditing plans, code 
    - **Pre-deploy:** Verify pre-change backups/snapshots exist with restrictive permissions (`0600`/`0700` where sensitive), syntax/dry-run validation passed, and rollback steps are executable.
    - **Post-deploy:** Run read-only health, log, service-status, and security-posture checks; verify unrelated services remain unaffected and zero secret values leaked into logs.
 4. **Live Overwatch (During Rollouts):**
-   - Your turn ends when you reply, so you cannot watch a rollout continuously. Live overwatch runs through `scripts/overwatch_watch.sh --once` under a Monitor, cron job, or loop, with `--check '<read-only health cmd>'` probes and the secret allowlist (`.overwatch/secret-allowlist`).
+   - Your turn ends when you reply, so you cannot watch a rollout continuously. Live overwatch runs through `scripts/overwatch_watch.sh --once` under a background watcher (any monitor, cron job or shell loop), with `--check '<read-only health cmd>'` probes and the secret allowlist (`.overwatch/secret-allowlist`).
    - Each wake-up, act on the events it printed: `BUS:` (new bus entries), `SECRET? <file>:<line> <pattern>`, and `CHECK-FAIL <n>: <last line>`. A `CHECK-FAIL` or real `SECRET?` during a rollout is grounds for `QA HOLD`.
 
 ## Strict Boundaries (Non-Negotiable)

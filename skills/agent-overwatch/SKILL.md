@@ -75,7 +75,7 @@ Assign every participant one clear role. Keep author/ops lanes and verification 
 - **Scale horizontally on demand:** Launch `research-1..N`, `dev-1..N`, `deploy-1..N`, and `qa-1..N` whenever required tasks partition cleanly without colliding on the same files, ports, locks, or mutable hosts.
 - **Scale QA to the review load** so verification doesn't queue behind implementation.
 - **Non-dependent work rule:** "Don't wait to do something that must be done in the project. If an agent is busy working on one aspect, and some other aspect doesn't depend on that work, work on it now with a separate agent (or agents)." Do not create speculative or optional work just to fill time. Every lane still obeys strict file ownership and mandatory QA.
-- **Live overwatch needs a watcher:** Subagents end their turns, so a QA agent cannot "keep watching" a deploy by itself. Run `scripts/overwatch_watch.sh --once` under a Monitor, cron, or loop, with `--check '<health cmd>'` probes and the secret allowlist, and wake QA on each `BUS:`, `SECRET?`, or `CHECK-FAIL` line it prints.
+- **Live overwatch needs a watcher:** Subagents end their turns, so a QA agent cannot "keep watching" a deploy by itself. Run `scripts/overwatch_watch.sh --once` under a background watcher (any monitor, cron job or shell loop), with `--check '<health cmd>'` probes and the secret allowlist, and wake QA on each `BUS:`, `SECRET?`, or `CHECK-FAIL` line it prints.
 
 See [model-routing-and-scaling.md](./references/model-routing-and-scaling.md) for sharding patterns and scheduling tables.
 
@@ -99,7 +99,7 @@ Use explicit artifacts to preserve shared state across turns, compactions, and s
 
 ### Built-In Tool Supersession (Mandatory)
 
-- **Native messaging/board tools win for live coordination:** If your runtime provides a built-in swarm message board or agent-to-agent messaging tool (e.g., Antigravity `swarm` `post_message` / `read_board`, `send_message`, or native agent teams), **use it instead of `AGENT_BUS.md` for live turn-to-turn handoffs**.
+- **Native messaging/board tools win for live coordination:** If your runtime provides a built-in swarm message board or agent-to-agent messaging tool (for example a swarm message board, a `send_message` tool, or native agent teams), **use it instead of `AGENT_BUS.md` for live turn-to-turn handoffs**.
 - **When `AGENT_BUS.md` is used:** When no native board exists (plain CLI sessions, multi-tool handoffs), when the project wants a Git-committed audit trail, or when `verify_atomic_branch.sh` must find QA verdicts in a ledger.
 
 ### Subdirectory Scoping (Monorepos & Nested Projects)
@@ -112,15 +112,17 @@ Use explicit artifacts to preserve shared state across turns, compactions, and s
 
 ## 5. Model Cost Tiering, Fallback & Usage Awareness
 
-Match model cost and reasoning depth to the cognitive risk of each role (details in [model-routing-and-scaling.md](./references/model-routing-and-scaling.md)):
+Match model cost and reasoning depth to the cognitive risk of each role. Tiers are defined by capability (details and vendor examples in [model-routing-and-scaling.md](./references/model-routing-and-scaling.md)):
 
-| Tier | Representative Models | Best Fit Roles & Tasks |
+| Tier | Capability | Best Fit Roles & Tasks |
 | --- | --- | --- |
-| **Economy / Fast** | `flash_lite`, `flash`, `haiku`, `mini` | Log parsing, file/inventory checks, status formatting, boilerplate scaffolding |
-| **Standard** | `sonnet`, `pro`, `gpt-4o` | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks |
-| **Frontier / Reasoning** | `opus`, `pro`, deep reasoning (`o3`) | **Mandatory `qa-agent` overwatch**, subtle debugging, security audits, complex `research-agent` architecture |
+| **Economy** | Small, fast, low-cost | Log parsing, file/inventory checks, status formatting, boilerplate scaffolding |
+| **Standard** | Balanced general-purpose | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks, routine QA re-reviews |
+| **Frontier** | Strongest reasoning available | **`qa-agent` overwatch for high-risk audits**, subtle debugging, security audits, complex `research-agent` architecture |
 
-**Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable, restricted by platform/orchestrator policy (e.g., inherit-only swarm workers), or blocked by quota, **run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
+**QA tier rule (proposal until adopted):** QA runs on the frontier tier for high-risk audits and on the standard tier for routine re-reviews. Until the project adopts this cost rule, run QA on the strongest tier available.
+
+**Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable, restricted by platform/orchestrator policy (for example, inherit-only swarm workers), or blocked by quota, **run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
 
 **Usage & budget awareness:**
 
@@ -166,4 +168,4 @@ Keep the user informed in plain, self-contained summaries as agents launch and f
 - `scripts/bus_append.sh`: atomic, timestamped, secret-checked bus append (`--from --to --type --subject [--ref auto]`, body on stdin)
 - `scripts/overwatch_watch.sh`: event watcher for live overwatch (`--once`, `--check 'CMD'`, `--allowlist FILE`, `--interval SEC`)
 - `scripts/coordinator_lease.sh`: coordinator lease (`claim|renew|release|status`, `--takeover`, `--ttl MIN`)
-- Installer (repository root `install.sh`): installs for Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub templates. `--link` symlinks so `git pull` updates the install, `--uninstall` removes it, and Claude Code users can instead add the repository as a plugin marketplace. See [agent-roles.md](./references/agent-roles.md) section 4.
+- Installer (repository root `install.sh`): installs adapters for several agent runtimes and GitHub templates. `--link` symlinks so `git pull` updates the install and `--uninstall` removes it. Per-tool details are in the adapter reference at the end of [agent-roles.md](./references/agent-roles.md) and in `examples/<tool>/`.
