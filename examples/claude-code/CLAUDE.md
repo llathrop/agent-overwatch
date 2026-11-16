@@ -52,6 +52,6 @@ When dispatching subagents in Claude Code, route tasks according to model capabi
 ## Communication & Coordination
 
 - **Native Agent Teams:** If running Claude Code with subagent dispatching enabled, pass structured parameters directly between supervisor and subagents.
-- **Audit Bus (`AGENT_BUS.md`):** If multiple Claude Code terminal sessions are operating concurrently in the workspace, append entries with `scripts/bus_append.sh --from ROLE --to LIST --type TYPE --subject TEXT [--ref auto]` (body on stdin). It stamps the UTC time; never hand-type timestamps. Format:
+- **Local Bus (`AGENT_BUS.md`, git-ignored, not committed; use `HANDOFF.md` for tracked handoff):** If multiple Claude Code terminal sessions are operating concurrently in the workspace, append entries with `scripts/bus_append.sh --from ROLE --to LIST --type TYPE --subject TEXT [--ref auto]` (body on stdin). It stamps the UTC time; never hand-type timestamps. Format:
   `### [<YYYY-MM-DD HH:MM:SS UTC>] <role> -> <recipient|all> | <TYPE> [<branch>@<sha12>] <subject>` (types: `BRIEF`, `PLAN`, `ACTION`, `RESULT`, `CONCERN`, `QA APPROVE`, `QA HOLD`, `TAKEOVER`, `STATUS`, `USAGE`).
 - Always tail `AGENT_BUS.md` or check subagent returns before state-changing steps.

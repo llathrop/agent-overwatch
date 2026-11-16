@@ -69,7 +69,7 @@ git worktree add ../wt-cli    -b feat/cli-flags main
 - Author 1 works exclusively inside `../wt-parser` on `feat/parser-errors`.
 - Author 2 works exclusively inside `../wt-cli` on `feat/cli-flags`.
 - Readers and `qa-agent` inspect each branch/worktree read-only (`git -C ../wt-parser diff main...HEAD` or `git diff main...feat/parser-errors`).
-- **Committed bus:** if `AGENT_BUS.md` is committed and several branches append to it, keep `AGENT_BUS.md merge=union` in `.gitattributes` (added by `init_workspace.sh`) so those appends merge without conflicts.
+- **Local bus:** `AGENT_BUS.md` is git-ignored, so it is never committed, pushed, or merged. A worktree does not receive it; point `bus_append.sh --bus` at the shared copy in the primary checkout. Durable state for other machines goes in the tracked `HANDOFF.md`.
 - **Critical Cleanup Rule:** NEVER remove a worktree (`git worktree remove`) until its commits are merged into `main` (or explicitly archived/abandoned by coordinator decision). Removing a worktree with unmerged work risks losing the lane's changes.
 
 ---

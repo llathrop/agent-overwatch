@@ -177,7 +177,7 @@ In Antigravity:
 - **Native Event-Driven Messaging:** Antigravity agents communicate in real time using `send_message` or the swarm board (`post_message`, `read_board`, `swarm_wait`). The runtime wakes up recipient agents reactively without polling loops.
 - **When to Use `AGENT_BUS.md`:**
   - Native messaging/swarm boards supersede `AGENT_BUS.md` for live coordination.
-  - Retain `AGENT_BUS.md` only when no native board is active or when the project requires an append-only, Git-committed audit trail across sessions or across multiple tools.
+  - Retain `AGENT_BUS.md` only when no native board is active or when sessions or tools on one machine need an append-only local log. It is git-ignored; cross-machine handoff goes through `HANDOFF.md`.
 
 ---
 

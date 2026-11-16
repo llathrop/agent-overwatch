@@ -37,8 +37,8 @@ Options:
 
 Creates (skipping existing files unless --force):
   HANDOFF.md, AGENT_BUS.md (unless --no-bus), status/, .overwatch/secret-allowlist,
-  and .gitattributes union-merge lines for AGENT_BUS.md / QA_BUS.md (appended if
-  missing). status/coordinator.lease is NOT pre-created; use coordinator_lease.sh.
+  and an AGENT_BUS.md entry in .gitignore (added if missing; the bus is local,
+  never committed). status/coordinator.lease is NOT pre-created; use coordinator_lease.sh.
 
 Examples:
   init_workspace.sh
@@ -206,11 +206,11 @@ get_fallback_agent_bus() {
   cat <<'EOF'
 # AGENT_BUS — Inter-Agent Coordination Log
 
-> **Supersession Rule:** When your runtime provides a built-in message board or native agent-to-agent messaging tool (for example a swarm message board, a `send_message` tool, or agent teams), use that native channel for live coordination. Use `AGENT_BUS.md` when no native board exists or when a Git-committed file-based audit trail is explicitly required.
+> **Supersession Rule:** When your runtime provides a built-in message board or native agent-to-agent messaging tool (for example a swarm message board, a `send_message` tool, or agent teams), use that native channel for live coordination. Use `AGENT_BUS.md` when no native board exists or when a local file-based log is needed. This file is git-ignored local coordination, not committed; use HANDOFF.md for tracked cross-machine handoff.
 >
 > **Append-Only Discipline:** Read the tail before writing, then append with `scripts/bus_append.sh` (for example `echo '- body' | bus_append.sh --from dev-1 --to qa-1 --type RESULT --subject 'feat/x ready' --ref auto`). It stamps the UTC time, appends atomically and refuses bodies that match secret patterns. Only when that script is unavailable, fall back to a quoted heredoc (`cat <<'EOF' >> AGENT_BUS.md`), so parallel agents never clobber concurrent entries.
 >
-> **Secret Hygiene:** Never write tokens, passwords, private keys, API keys, PII, or credential strings into `AGENT_BUS.md` (or any committed file).
+> **Secret Hygiene:** Never write tokens, passwords, private keys, API keys, PII, or credential strings into `AGENT_BUS.md` (or any file).
 
 ## Entry Format
 
@@ -409,24 +409,26 @@ representing its current task, progress, and verification status:
 STATUS_EOF
 write_file_safe "$TARGET_ABS/status/README.md" "$STATUS_README" "Status Directory README"
 
-# 4. .gitattributes: union merge for append-only buses, so parallel branches
-#    that each append to the committed bus do not conflict. Existing files keep
-#    their content; only missing lines are appended.
-GITATTR_FILE="$TARGET_ABS/.gitattributes"
-for attr_line in "AGENT_BUS.md merge=union" "QA_BUS.md merge=union"; do
-  if [[ -f "$GITATTR_FILE" ]] && grep -qxF "$attr_line" "$GITATTR_FILE"; then
-    echo "[SKIP] ${GITATTR_FILE} already has '${attr_line}'"
-  elif [[ "$DRY_RUN" == true ]]; then
-    echo "[DRY-RUN] Would add '${attr_line}' to ${GITATTR_FILE}"
-  else
-    # Ensure a trailing newline before appending to a pre-existing file.
-    if [[ -s "$GITATTR_FILE" && -n "$(tail -c 1 "$GITATTR_FILE")" ]]; then
-      printf '\n' >> "$GITATTR_FILE"
-    fi
-    printf '%s\n' "$attr_line" >> "$GITATTR_FILE"
-    echo "[OK] Added '${attr_line}' to ${GITATTR_FILE}"
+# 4. .gitignore: the bus is local coordination and must not be tracked.
+#    Existing files keep their content; only the missing line is appended.
+#    HANDOFF.md stays tracked for cross-machine handoff.
+GITIGNORE_FILE="$TARGET_ABS/.gitignore"
+if [[ "$NO_BUS" == true ]]; then
+  :
+elif [[ -f "$GITIGNORE_FILE" ]] && grep -qxF "AGENT_BUS.md" "$GITIGNORE_FILE"; then
+  echo "[SKIP] ${GITIGNORE_FILE} already ignores AGENT_BUS.md"
+elif [[ "$DRY_RUN" == true ]]; then
+  echo "[DRY-RUN] Would add 'AGENT_BUS.md' to ${GITIGNORE_FILE}"
+else
+  if [[ -s "$GITIGNORE_FILE" && -n "$(tail -c 1 "$GITIGNORE_FILE")" ]]; then
+    printf '\n' >> "$GITIGNORE_FILE"
   fi
-done
+  printf '%s\n' "AGENT_BUS.md" >> "$GITIGNORE_FILE"
+  echo "[OK] Added 'AGENT_BUS.md' to ${GITIGNORE_FILE}"
+fi
+if [[ "$NO_BUS" != true ]]; then
+  echo "[NOTE] AGENT_BUS.md is local coordination (git-ignored, not committed). Use the tracked HANDOFF.md for cross-machine handoff."
+fi
 
 # 5. .overwatch/secret-allowlist for overwatch_watch.sh
 read -r -d '' ALLOWLIST_CONTENT <<'ALLOW_EOF' || true

@@ -90,17 +90,17 @@ Use explicit artifacts to preserve shared state across turns, compactions, and s
 | `HANDOFF.md` | Living current state: architecture, active branches, risks, ordered next steps | Coordinator/lead only; keep it short (≤200 chars per cell or bullet, ~150 lines). Detail goes to the bus |
 | `AGENT_BUS.md` | Append-only log (`BRIEF`, `ACTION`, `RESULT`, `QA APPROVE`/`HOLD`, `TAKEOVER`, `USAGE`) | Read the tail first; append with `scripts/bus_append.sh` (it stamps the UTC time; never hand-type timestamps) |
 | `status/coordinator.lease` | Which session is the active coordinator | Only through `scripts/coordinator_lease.sh claim\|renew\|release\|status` |
-| `QA_BUS.md` *(optional)* | Dedicated audit ledger when QA traffic is high | Same append rule; cross-reference from `AGENT_BUS.md` |
+| `QA_BUS.md` *(optional)* | Optional separate local ledger when QA traffic is high (also untracked) | Same append rule; cross-reference from `AGENT_BUS.md` |
 | `status/<agent>.md` *(optional)* | Per-agent snapshot for quick status scans | Each agent updates **only its own** file |
 
 - **Coordinator lease and takeover:** Every session runs `coordinator_lease.sh status` before acting. To replace a stale coordinator, `claim --takeover` (this posts a `TAKEOVER` entry). A returning session that finds itself replaced stands down or coordinates on the bus; it does not resume acting.
-- **Committed bus with parallel branches:** `init_workspace.sh` adds `AGENT_BUS.md merge=union` to `.gitattributes` so branches that each append entries merge cleanly.
+- **The bus is local, not committed:** `AGENT_BUS.md` is git-ignored (`init_workspace.sh` adds it to `.gitignore`). It is live coordination on one machine, not an audit trail in git and never pushed. With parallel worktrees, point every agent at the one shared copy with `--bus <path>`. `HANDOFF.md` is the tracked file; cross-machine handoff goes through it.
 - **Secret-scan false positives:** List allowed patterns in `.overwatch/secret-allowlist`. Report hits as `file:line` plus the pattern name, never the value.
 
 ### Built-In Tool Supersession (Mandatory)
 
 - **Native messaging/board tools win for live coordination:** If your runtime provides a built-in swarm message board or agent-to-agent messaging tool (for example a swarm message board, a `send_message` tool, or native agent teams), **use it instead of `AGENT_BUS.md` for live turn-to-turn handoffs**.
-- **When `AGENT_BUS.md` is used:** When no native board exists (plain CLI sessions, multi-tool handoffs), when the project wants a Git-committed audit trail, or when `verify_atomic_branch.sh` must find QA verdicts in a ledger.
+- **When `AGENT_BUS.md` is used:** When no native board exists (plain CLI sessions, multi-tool handoffs), or when `verify_atomic_branch.sh` must find QA verdicts in a ledger.
 
 ### Subdirectory Scoping (Monorepos & Nested Projects)
 
@@ -158,10 +158,10 @@ Keep the user informed in plain, self-contained summaries as agents launch and f
 
 - [references/agent-roles.md](./references/agent-roles.md): brief templates, anti-patterns, per-role QA checklists, QA permission recipes, installer tool mappings and install options
 - [references/coordination-files.md](./references/coordination-files.md): `HANDOFF.md` / `AGENT_BUS.md` schemas, verdict format, coordinator lease, size caps, supersession matrix, monorepo scoping
-- [references/git-and-github-workflow.md](./references/git-and-github-workflow.md): verdict-gated merge cycle, parallel worktrees, union-merged bus, GitHub CLI/PR flow, upstream safety gates
+- [references/git-and-github-workflow.md](./references/git-and-github-workflow.md): verdict-gated merge cycle, parallel worktrees, local (untracked) bus, GitHub CLI/PR flow, upstream safety gates
 - [references/model-routing-and-scaling.md](./references/model-routing-and-scaling.md): model tiers, fallback, usage & budget awareness, sharding, non-dependent work
 - [templates/](./templates/): [HANDOFF.template.md](./templates/HANDOFF.template.md), [SUBDIR_HANDOFF.template.md](./templates/SUBDIR_HANDOFF.template.md), [AGENT_BUS.template.md](./templates/AGENT_BUS.template.md), [QA_CHECKLIST.template.md](./templates/QA_CHECKLIST.template.md)
-- [scripts/init_workspace.sh](./scripts/init_workspace.sh): scaffolds root or `--subdir` workspaces (`--no-bus`, `--dry-run`, `--force`), including `.gitattributes` union merge, the lease placeholder, and `.overwatch/secret-allowlist`
+- [scripts/init_workspace.sh](./scripts/init_workspace.sh): scaffolds root or `--subdir` workspaces (`--no-bus`, `--dry-run`, `--force`), including the `.gitignore` entry for the local bus, the lease placeholder, and `.overwatch/secret-allowlist`
 - [scripts/verify_atomic_branch.sh](./scripts/verify_atomic_branch.sh): pre-merge gate for branch isolation, clean tree, diff scope, per-commit secret scan, and a QA verdict matching `<branch>@<sha>` (`--allow-external-qa` to override)
 - `scripts/bus_append.sh`: atomic, timestamped, secret-checked bus append (`--from --to --type --subject [--ref auto]`, body on stdin)
 - `scripts/overwatch_watch.sh`: event watcher for live overwatch (`--once`, `--check 'CMD'`, `--allowlist FILE`, `--interval SEC`)

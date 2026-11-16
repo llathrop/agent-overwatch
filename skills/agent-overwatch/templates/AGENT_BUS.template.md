@@ -1,7 +1,7 @@
 # AGENT BUS: Append-Only Multi-Agent Coordination Log
 
 > [!IMPORTANT]
-> **Use built-in agent board/messaging tools (e.g., `swarm` board or native `send_message`) instead if available; keep `AGENT_BUS.md` only when no built-in board exists or when a repo-committed audit trail is required.**
+> **Use built-in agent board/messaging tools (e.g., `swarm` board or native `send_message`) instead if available; keep `AGENT_BUS.md` only when no built-in board exists or when a local file log is needed. This file is git-ignored local coordination, not committed; use `HANDOFF.md` for tracked cross-machine handoff.**
 
 ---
 
