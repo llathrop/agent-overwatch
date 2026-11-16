@@ -10,100 +10,107 @@ description: >-
 
 # Agent Overwatch
 
-A general-purpose multi-agent operating model that combines **parallel execution** and **continuous non-blocking dispatch** with **mandatory independent QA** on every plan, code change, and deployment.
+A general-purpose multi-agent operating model that combines **parallel execution** of independent work with **mandatory independent QA** on every plan, code change, and deployment.
+
+Source, agent prompts, and installer: https://github.com/llathrop/agent-overwatch. Paths such as `agents/qa-agent.md` or `install.sh` below refer to that repository, not to this installed skill folder.
 
 ## 1. Core Philosophy
 
 Speed and reliability come from the same discipline:
 
 1. **Split work into collision-free lanes** so multiple agents execute concurrently instead of queuing behind one serial bottleneck.
-2. **Never sit idle on a slow dependency** — whenever one lane blocks on long tests, builds, research, or soak checks, immediately dispatch non-dependent work to separate lanes.
+2. **Don't defer necessary independent work.** "Don't wait to do something that must be done in the project. If an agent is busy working on one aspect, and some other aspect doesn't depend on that work, work on it now with a separate agent (or agents)." This means starting required work that has no dependency now. It does not mean inventing optional work to fill waiting time.
 3. **Gate every milestone with independent, read-only QA.** High velocity only holds if defects, broken assumptions, and unverified rollouts are caught before merge or promotion.
 
 ---
 
 ## 2. Agent Roles & Mandatory QA Pairing
 
-Assign every participant one clear role. Keep author/ops lanes and verification lanes strictly separated. For brief templates, checklists, and installer tool mappings, see [agent-roles.md](./references/agent-roles.md). Portable agent prompts live under [agents/](../../agents/).
+Assign every participant one clear role. Keep author/ops lanes and verification lanes strictly separated. Brief templates, checklists, QA permission recipes, and installer tool mappings are in [agent-roles.md](./references/agent-roles.md). The portable role prompts are `agents/research-agent.md`, `agents/dev-agent.md`, `agents/deploy-agent.md`, and `agents/qa-agent.md` in the repository (the installer copies them into your runtime's agents folder).
 
 ### 2.1 Coordinator / Orchestrator
 
 - **When to use:** Any task spanning multiple files, domains, investigation paths, or execution phases (planning -> build -> verify -> deploy).
 - **How to use:**
-  1. Decompose work into non-overlapping slices (by file, directory, service, branch, or question).
-  2. Issue **self-contained briefs**: exact owned scope, off-limits files/systems, required inputs, verification criteria, and who receives the handoff next.
-  3. Dispatch parallel workers immediately, keep turns short, monitor status, and route outputs directly to QA without paraphrasing away exact paths or raw logs.
-  4. Post **self-contained user-facing progress updates** after each completed batch or phase (never waiting until everything finishes or assuming the user reads internal agent messages or `AGENT_BUS.md`).
-- **Strict boundaries:** Do not write large diffs, run long debugging loops, or perform slow manual checks inline while workers wait. Never override or bypass a `QA HOLD`.
-- **Mandatory QA pairing:** Maintain roughly **1 `qa-agent` per 2–4 active workers**. Track every deliverable through `QA APPROVE` before allowing implementation on a plan, merge of a branch, or promotion of a release.
+  1. **Check the coordinator lease first** (`scripts/coordinator_lease.sh status`; see section 4). Act only if you hold it or have claimed it.
+  2. Decompose work into non-overlapping slices (by file, directory, service, branch, or question).
+  3. Issue **self-contained briefs**: exact owned scope, off-limits files/systems, required inputs, verification criteria, and who receives the handoff next.
+  4. Dispatch every independent required slice now, keep turns short, and route outputs directly to QA without paraphrasing away exact paths or raw logs.
+  5. Post **self-contained user-facing progress updates** after each completed batch or phase (section 7).
+- **Strict boundaries:** Do not write large diffs, run long debugging loops, or perform slow manual checks inline while workers wait. Never override or bypass a `QA HOLD`. **Never write, paraphrase, or relay a QA verdict**: QA posts its own. Never run commands that QA was denied on QA's behalf.
+- **Mandatory QA pairing:** Scale QA to the review load so verification doesn't queue. Track every deliverable through `QA APPROVE` before allowing implementation on a plan, merge of a branch, or promotion of a release.
 
 ### 2.2 Research / Planner Agent (`research-agent`)
 
 - **When to use:** Codebase exploration, root-cause investigation, upgrade/compatibility analysis, RFCs, security audits, or trade-off comparisons before implementation or rollout.
-- **How to use:** Dispatch with specific questions and target scopes in [agents/research-agent.md](../../agents/research-agent.md). Require exact file paths, line numbers, verified command/API facts, failure modes, validation gates, and rollback plans.
+- **How to use:** Dispatch with specific questions and target scopes. Require exact file paths, line numbers, verified command/API facts, failure modes, validation gates, and rollback plans.
 - **Strict boundaries:** **Read-only.** Never edits production/source files, never applies infrastructure changes, and never presents inferred behavior as verified fact.
-- **Mandatory QA pairing:** **Pre-execution audit.** Before `dev-agent` writes code or `deploy-agent` touches runtime state, `qa-agent` audits the research/plan for wrong assumptions, race/ordering hazards, missing edge cases, testability, and rollback completeness.
+- **Mandatory QA pairing:** **Pre-execution audit.** Before `dev-agent` writes code or `deploy-agent` touches runtime state, `qa-agent` audits the plan for wrong assumptions, race/ordering hazards, missing edge cases, testability, and rollback completeness.
 
 ### 2.3 Development / Author Agent (`dev-agent`)
 
 - **When to use:** Writing features, bug fixes, tests, refactoring, IaC/configs, CI pipelines, or documentation.
-- **How to use:** Assign one atomic branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and non-overlapping file scope via [agents/dev-agent.md](../../agents/dev-agent.md). When running multiple `dev-agent` instances concurrently, isolate them via strict file ownership or separate `git worktree` checkouts.
+- **How to use:** Assign one atomic branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and a non-overlapping file scope. Isolate concurrent `dev-agent` instances with strict file ownership or separate `git worktree` checkouts.
 - **Strict boundaries:** Edit only assigned files/worktree; run relevant tests/linters before handoff; never commit credentials or push/merge unreviewed work; never deploy directly to shared production unless explicitly scoped.
-- **Mandatory QA pairing:** **Pre-merge audit.** Before any branch merges to `main`, `qa-agent` inspects the full diff, checks test/lint evidence, audits edge cases and secret hygiene, and emits `APPROVE` or `HOLD`.
+- **Mandatory QA pairing:** **Pre-merge audit.** Before any branch merges to `main`, `qa-agent` inspects the full diff, checks test/lint evidence, audits edge cases and secret hygiene, and posts `QA APPROVE` or `QA HOLD` bound to `<branch>@<sha12>`. Any new commit after an approval needs re-review.
 
 ### 2.4 Deployment / Operations Agent (`deploy-agent`)
 
 - **When to use:** Package/container upgrades, runtime config rollouts, database migrations, infrastructure provisioning, or live environment verification.
-- **How to use:** Dispatch with an approved plan via [agents/deploy-agent.md](../../agents/deploy-agent.md). Always snapshot/backup pre-change state first, apply the minimum atomic change, execute smoke/soak checks, and keep rollback scripts verified.
+- **How to use:** Dispatch with an approved plan. Always snapshot/backup pre-change state first, apply the minimum atomic change, execute smoke/soak checks, and keep rollback scripts verified. During a live rollout, run `scripts/overwatch_watch.sh` so QA is woken by real events (section 3).
 - **Strict boundaries:** Never deploy an unapproved plan or skip pre-change backups. Never rewrite application architecture mid-rollout; stop and roll back if stop-criteria trigger.
 - **Mandatory QA pairing:** **Two-stage ops audit.** Pre-deploy: `qa-agent` checks backup integrity, dry-run output, and rollback readiness. Post-deploy: `qa-agent` independently audits live health checks, logs, permissions, and secret hygiene.
 
 ### 2.5 Mandatory QA / Overwatch Agent (`qa-agent`)
 
-- **When to use:** Continuously across every active lane — planning, coding, and operations.
-- **How to use:** Spawn via [agents/qa-agent.md](../../agents/qa-agent.md) (one QA per 2–4 workers). Point QA directly at the plan, branch/diff, test logs, or live read-only checks. Require a binary **`APPROVE`** or **`HOLD`** verdict citing exact file paths, line numbers, and command outputs.
-- **Strict boundaries:** **Zero-trust and strictly read-only on deliverables.** Never edits source code, never patches configs to "help out", and never deploys. Defects go back to the originating agent so ownership stays clean and two agents never collide in one file.
-- **Cross-role pairing loop:** Audits `research-agent` plans pre-execution, `dev-agent` diffs and tests pre-merge, and `deploy-agent` backups/rollouts pre- and post-deploy, escalating blockers cleanly to the originating lane and Coordinator.
+- **When to use:** Across every active lane: planning, coding, and operations.
+- **How to use:** Point QA directly at the plan, branch/diff, test logs, or live read-only checks. QA writes its **own** binary verdict with `scripts/bus_append.sh --type "QA APPROVE" --ref auto` (or `"QA HOLD"`), citing commands, outputs, and `file:line` evidence.
+- **Strict boundaries:** **Zero-trust and read-only on deliverables.** Never edits source code, never patches configs to "help out", and never deploys. "Read-only" in a prompt is only a request: enforce it with the runtime's tool restrictions (see [agent-roles.md](./references/agent-roles.md)). If QA is denied a command, it says so and verifies from posted evidence; it never works around the denial.
+- **Cross-role pairing loop:** Audits `research-agent` plans pre-execution, `dev-agent` diffs and tests pre-merge, and `deploy-agent` backups/rollouts pre- and post-deploy, escalating blockers to the originating lane and Coordinator.
 
 ---
 
-## 3. Horizontal Scaling & Zero-Idle Parallelism
+## 3. Horizontal Scaling & Non-Dependent Work
 
-- **Scale horizontally on demand:** Launch `research-1..N`, `dev-1..N`, `deploy-1..N`, and `qa-1..N` whenever tasks partition cleanly without colliding on the same files, ports, locks, or mutable hosts.
-- **Keep QA proportional:** Target **1 `qa-agent` per 2–4 active workers** so verification never queues behind implementation.
-- **Non-Dependent Work Rule (Zero-Idle Dispatch):** Whenever any lane enters a slow or blocking step (full test suites, container builds, deep research, timed deploy soaks, CI waits), **immediately dispatch non-dependent work** to free or newly spawned agents — for example, drafting the next atomic RFC (`research-agent`), scaffolding tests or docs for another module (`dev-agent`), or auditing a completed sibling branch (`qa-agent`). Every side lane still obeys strict file ownership and mandatory QA.
+- **Scale horizontally on demand:** Launch `research-1..N`, `dev-1..N`, `deploy-1..N`, and `qa-1..N` whenever required tasks partition cleanly without colliding on the same files, ports, locks, or mutable hosts.
+- **Scale QA to the review load** so verification doesn't queue behind implementation.
+- **Non-dependent work rule:** "Don't wait to do something that must be done in the project. If an agent is busy working on one aspect, and some other aspect doesn't depend on that work, work on it now with a separate agent (or agents)." Do not create speculative or optional work just to fill time. Every lane still obeys strict file ownership and mandatory QA.
+- **Live overwatch needs a watcher:** Subagents end their turns, so a QA agent cannot "keep watching" a deploy by itself. Run `scripts/overwatch_watch.sh --once` under a Monitor, cron, or loop, with `--check '<health cmd>'` probes and the secret allowlist, and wake QA on each `BUS:`, `SECRET?`, or `CHECK-FAIL` line it prints.
 
-See [model-routing-and-scaling.md](./references/model-routing-and-scaling.md) for sharding patterns and parallel scheduling tables.
+See [model-routing-and-scaling.md](./references/model-routing-and-scaling.md) for sharding patterns and scheduling tables.
 
 ---
 
 ## 4. Coordination Files & Supersession Rules
 
-Use explicit artifacts to preserve shared state across turns, compactions, and sessions (schemas and templates in [coordination-files.md](./references/coordination-files.md)):
+Use explicit artifacts to preserve shared state across turns, compactions, and sessions (schemas in [coordination-files.md](./references/coordination-files.md)):
 
 | Artifact | Purpose | Write Rule |
 | --- | --- | --- |
-| `HANDOFF.md` | Living current state: architecture, active branches, risks, ordered next steps | Updated on milestones/handoffs by coordinator or designated lead |
-| `AGENT_BUS.md` | Append-only chronological log (`BRIEF`, `ACTION`, `RESULT`, `QA APPROVE`/`HOLD`) | Read tail first; **atomic heredoc append only** (`cat <<'EOF' >> AGENT_BUS.md`) |
-| `QA_BUS.md` *(optional)* | Dedicated audit ledger when QA traffic is high | Same atomic append rule; cross-reference from `AGENT_BUS.md` |
-| `status/<agent>.md` *(optional)* | Current per-agent snapshot for quick status scans | Each agent updates **only its own** file |
+| `HANDOFF.md` | Living current state: architecture, active branches, risks, ordered next steps | Coordinator/lead only; keep it short (≤200 chars per cell or bullet, ~150 lines). Detail goes to the bus |
+| `AGENT_BUS.md` | Append-only log (`BRIEF`, `ACTION`, `RESULT`, `QA APPROVE`/`HOLD`, `TAKEOVER`, `USAGE`) | Read the tail first; append with `scripts/bus_append.sh` (it stamps the UTC time; never hand-type timestamps) |
+| `status/coordinator.lease` | Which session is the active coordinator | Only through `scripts/coordinator_lease.sh claim\|renew\|release\|status` |
+| `QA_BUS.md` *(optional)* | Dedicated audit ledger when QA traffic is high | Same append rule; cross-reference from `AGENT_BUS.md` |
+| `status/<agent>.md` *(optional)* | Per-agent snapshot for quick status scans | Each agent updates **only its own** file |
+
+- **Coordinator lease and takeover:** Every session runs `coordinator_lease.sh status` before acting. To replace a stale coordinator, `claim --takeover` (this posts a `TAKEOVER` entry). A returning session that finds itself replaced stands down or coordinates on the bus; it does not resume acting.
+- **Committed bus with parallel branches:** `init_workspace.sh` adds `AGENT_BUS.md merge=union` to `.gitattributes` so branches that each append entries merge cleanly.
+- **Secret-scan false positives:** List allowed patterns in `.overwatch/secret-allowlist`. Report hits as `file:line` plus the pattern name, never the value.
 
 ### Built-In Tool Supersession (Mandatory)
 
-- **Native messaging/board tools win for live coordination:** If your runtime provides a built-in swarm message board or agent-to-agent messaging tool (e.g., Antigravity `swarm` `post_message` / `read_board`, `send_message`, or native agent teams), **use that native mechanism instead of `AGENT_BUS.md` for live turn-to-turn handoffs**.
-- **When `AGENT_BUS.md` is used:** Keep `AGENT_BUS.md` when no native board exists (plain CLI sessions, multi-tool handoffs) or when the project requires a Git-committed chronological audit trail.
+- **Native messaging/board tools win for live coordination:** If your runtime provides a built-in swarm message board or agent-to-agent messaging tool (e.g., Antigravity `swarm` `post_message` / `read_board`, `send_message`, or native agent teams), **use it instead of `AGENT_BUS.md` for live turn-to-turn handoffs**.
+- **When `AGENT_BUS.md` is used:** When no native board exists (plain CLI sessions, multi-tool handoffs), when the project wants a Git-committed audit trail, or when `verify_atomic_branch.sh` must find QA verdicts in a ledger.
 
 ### Subdirectory Scoping (Monorepos & Nested Projects)
 
-When a workspace hosts independent services, sub-packages, or nested project repositories under subdirectories:
-
-- Give an independent subproject its own `<subproject>/HANDOFF.md` and `<subproject>/AGENT_BUS.md` whenever it has an independent release cycle, architecture, or active agent stream.
-- Keep the **root `HANDOFF.md` thin**: summarize workspace-wide rules and link directly to child `<subproject>/HANDOFF.md` files instead of duplicating per-service state.
-- **Update scope:** Agents executing inside a subproject update `<subproject>/HANDOFF.md` (and `<subproject>/AGENT_BUS.md` if file-bus mode is active); update root `HANDOFF.md` only when shared interfaces, workspace priorities, or cross-project status change.
+- Give an independent subproject its own `<subproject>/HANDOFF.md` and `<subproject>/AGENT_BUS.md` when it has an independent release cycle, architecture, or active agent stream.
+- Keep the **root `HANDOFF.md` thin**: summarize workspace-wide rules and link to child `HANDOFF.md` files instead of duplicating per-service state.
+- Agents inside a subproject update that subproject's files; update the root only when shared interfaces, workspace priorities, or cross-project status change.
 
 ---
 
-## 5. Model Cost Tiering & Graceful Fallback
+## 5. Model Cost Tiering, Fallback & Usage Awareness
 
 Match model cost and reasoning depth to the cognitive risk of each role (details in [model-routing-and-scaling.md](./references/model-routing-and-scaling.md)):
 
@@ -113,48 +120,50 @@ Match model cost and reasoning depth to the cognitive risk of each role (details
 | **Standard** | `sonnet`, `pro`, `gpt-4o` | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks |
 | **Frontier / Reasoning** | `opus`, `pro`, deep reasoning (`o3`) | **Mandatory `qa-agent` overwatch**, subtle debugging, security audits, complex `research-agent` architecture |
 
-**Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable in your tool runtime, restricted by platform/orchestrator policy (e.g., inherit-only swarm workers unless the user explicitly overrides), or blocked by quota/rate limits, **drop differing-cost routing immediately and run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
+**Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable, restricted by platform/orchestrator policy (e.g., inherit-only swarm workers), or blocked by quota, **run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
+
+**Usage & budget awareness:**
+
+- If the runtime exposes usage or spend numbers (a usage/limits command, statusline cost data, a budget API, token-target directives), track them and warn the user as limits approach (around 75% and 90%), stating which lanes are still running. Optionally log a `USAGE` bus entry.
+- If no usage numbers are available, ignore this rule. Don't guess and don't throttle.
+- On a rate limit (HTTP 429 or equivalent), pause and record the state in `HANDOFF.md` (running lanes, branches, pending verdicts) so another session can resume.
 
 ---
 
 ## 6. Git & Remote Repository Workflow
 
-Deliver cleanly in small, independently verifiable increments (full playbook in [git-and-github-workflow.md](./references/git-and-github-workflow.md)):
+Deliver in small, independently verifiable increments (full playbook in [git-and-github-workflow.md](./references/git-and-github-workflow.md)):
 
 1. **Atomic Branches:** Cut a short-lived branch per cohesive unit (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`, `ops/<topic>`). Parallel authors use isolated `git worktree` directories.
-2. **Incremental QA-Gated Merge:** Finish one atomic change -> run tests/checks -> obtain `qa-agent` `APPROVE` -> **merge immediately to `main`/`master`** -> cut the next branch from updated `main`. Never stockpile unmerged multi-step work on giant branches.
-3. **Own Repositories & Own Forks (GitHub / GitLab):**
-   - Open or link an Issue for the atomic task.
-   - Push the feature branch and open a Pull/Merge Request referencing the Issue (`Closes #N`) with test evidence and QA sign-off.
-   - Merge once CI + QA pass, then clean up the branch.
+2. **Incremental QA-Gated Merge:** Finish one atomic change -> run checks -> QA posts `QA APPROVE <branch>@<sha12>` -> `scripts/verify_atomic_branch.sh` passes -> **merge to `main`** -> cut the next branch from updated `main`. The gate fails without a matching QA verdict for the current HEAD unless `--allow-external-qa` is passed explicitly (for QA recorded outside the bus, such as a PR review).
+3. **Own Repositories & Own Forks (GitHub / GitLab):** Open or link an Issue, push the branch, open a PR referencing it (`Closes #N`) with test evidence and the QA verdict ref, and merge once CI + QA pass.
 4. **Public / Upstream Repositories (Strict Safety Guardrail):**
-   - Read and follow the project's `CONTRIBUTING.md`, style guides, tests, and issue/PR templates strictly.
-   - **ALWAYS ask the user for clarification and explicit confirmation BEFORE taking any action that affects the remote upstream** — including opening/commenting on upstream issues, pushing branches to shared/upstream remotes, or opening/updating Pull Requests.
+   - Follow the project's `CONTRIBUTING.md`, style guides, tests, and issue/PR templates.
+   - **ALWAYS ask the user for explicit confirmation BEFORE any action that affects the remote upstream**: opening/commenting on upstream issues, pushing branches to shared/upstream remotes, or opening/updating Pull Requests.
 
 ---
 
 ## 7. Live User-Facing Progress Updates
 
-Keep the user continuously informed in plain, self-contained summaries as agents launch and finish work phases:
+Keep the user informed in plain, self-contained summaries as agents launch and finish work phases:
 
-- **Report continuously, not just at the end:** Summarize progress whenever a meaningful batch, branch, or QA gate finishes and when dispatching the next parallel lanes.
-- **Never assume shared internal context:** The user may not see native subagent messages, swarm boards, raw logs, or `AGENT_BUS.md`. State enough context so every update stands on its own without cryptic internal IDs.
-- **What every milestone update should cover:**
-  1. **What changed and why** — concrete deliverables, key technical decisions, and notable tradeoffs.
-  2. **QA catches and fixes** — any bugs, failing checks, edge cases, or hygiene/secret issues caught by `qa-agent` and how the originating agent fixed them.
-  3. **Verification evidence** — concise pass/fail summary of tests, syntax/lint checks, or health probes observed (no raw terminal log dumps).
-  4. **What runs next** — active or newly dispatched parallel lanes and any decision/confirmation needed from the user.
-- **Strict boundary:** Stay concise and never paste secrets, tokens, keys, or raw credential values into progress messages.
+- **Report as you go, not just at the end:** Summarize whenever a batch, branch, or QA gate finishes and when dispatching the next lanes.
+- **Never assume shared internal context:** The user may not see subagent messages, swarm boards, raw logs, or `AGENT_BUS.md`. Every update must stand on its own without cryptic internal IDs.
+- **Each milestone update covers:** (1) what changed and why, including key tradeoffs; (2) what QA caught and how it was fixed; (3) verification evidence as a concise pass/fail summary; (4) what runs next and any decision needed from the user. Include usage warnings when section 5 applies.
+- **Strict boundary:** Never paste secrets, tokens, keys, or raw credential values into progress messages.
 
 ---
 
 ## 8. Reference & Tooling Library
 
-- [references/agent-roles.md](./references/agent-roles.md) — Brief templates, anti-patterns, per-role QA checklists, and installer tool mappings
-- [references/coordination-files.md](./references/coordination-files.md) — `HANDOFF.md` / `AGENT_BUS.md` schemas, supersession matrix, and monorepo scoping
-- [references/git-and-github-workflow.md](./references/git-and-github-workflow.md) — Atomic merge cycle, parallel worktrees, GitHub CLI/PR flow, and upstream safety gates
-- [references/model-routing-and-scaling.md](./references/model-routing-and-scaling.md) — Model tier matrix, quota/policy fallback, sharding, and non-dependent dispatch
-- [templates/](./templates/) — Ready-to-copy [HANDOFF.template.md](./templates/HANDOFF.template.md), [SUBDIR_HANDOFF.template.md](./templates/SUBDIR_HANDOFF.template.md), [AGENT_BUS.template.md](./templates/AGENT_BUS.template.md), and [QA_CHECKLIST.template.md](./templates/QA_CHECKLIST.template.md)
-- [scripts/init_workspace.sh](./scripts/init_workspace.sh) — Scaffolds root or `--subdir` workspaces (supports `--no-bus`, `--dry-run`, `--force`)
-- [scripts/verify_atomic_branch.sh](./scripts/verify_atomic_branch.sh) — Enforces branch isolation, clean tree, diff scope, secret scan, and latest QA verdict pre-merge
-- [install.sh](../../install.sh) — Cross-platform installer for Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub templates
+- [references/agent-roles.md](./references/agent-roles.md): brief templates, anti-patterns, per-role QA checklists, QA permission recipes, installer tool mappings and install options
+- [references/coordination-files.md](./references/coordination-files.md): `HANDOFF.md` / `AGENT_BUS.md` schemas, verdict format, coordinator lease, size caps, supersession matrix, monorepo scoping
+- [references/git-and-github-workflow.md](./references/git-and-github-workflow.md): verdict-gated merge cycle, parallel worktrees, union-merged bus, GitHub CLI/PR flow, upstream safety gates
+- [references/model-routing-and-scaling.md](./references/model-routing-and-scaling.md): model tiers, fallback, usage & budget awareness, sharding, non-dependent work
+- [templates/](./templates/): [HANDOFF.template.md](./templates/HANDOFF.template.md), [SUBDIR_HANDOFF.template.md](./templates/SUBDIR_HANDOFF.template.md), [AGENT_BUS.template.md](./templates/AGENT_BUS.template.md), [QA_CHECKLIST.template.md](./templates/QA_CHECKLIST.template.md)
+- [scripts/init_workspace.sh](./scripts/init_workspace.sh): scaffolds root or `--subdir` workspaces (`--no-bus`, `--dry-run`, `--force`), including `.gitattributes` union merge, the lease placeholder, and `.overwatch/secret-allowlist`
+- [scripts/verify_atomic_branch.sh](./scripts/verify_atomic_branch.sh): pre-merge gate for branch isolation, clean tree, diff scope, per-commit secret scan, and a QA verdict matching `<branch>@<sha>` (`--allow-external-qa` to override)
+- `scripts/bus_append.sh`: atomic, timestamped, secret-checked bus append (`--from --to --type --subject [--ref auto]`, body on stdin)
+- `scripts/overwatch_watch.sh`: event watcher for live overwatch (`--once`, `--check 'CMD'`, `--allowlist FILE`, `--interval SEC`)
+- `scripts/coordinator_lease.sh`: coordinator lease (`claim|renew|release|status`, `--takeover`, `--ttl MIN`)
+- Installer (repository root `install.sh`): installs for Antigravity, Claude Code, Codex CLI, Gemini CLI, Cursor, and GitHub templates. `--link` symlinks so `git pull` updates the install, `--uninstall` removes it, and Claude Code users can instead add the repository as a plugin marketplace. See [agent-roles.md](./references/agent-roles.md) section 4.

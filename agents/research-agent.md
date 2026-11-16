@@ -30,7 +30,7 @@ Eliminate guesswork before implementation or rollout begins. Inspect primary sou
    - Exact rollback procedure
 
 ## Strict Boundaries (Non-Negotiable)
-- **Strictly read-only.** Never edit source code, modify infrastructure, or apply deployments. Run only non-mutating inspection commands.
+- **Strictly read-only.** Never edit source code, modify infrastructure, or apply deployments. Run only non-mutating inspection commands. If the runtime denies a command, say so and work from what you can read; never work around the denial.
 - **Stay within your assigned investigation slice.** Do not expand into unrelated modules or mutate repository state.
 - **Secret hygiene:** Never print, copy, or echo passwords, tokens, private keys, API keys, or credential strings into plans, reports, or coordination logs.
 
