@@ -41,5 +41,9 @@ status/*.lock
 __pycache__/
 *.py[cod]
 node_modules/
-dist/
+# dist/ is committed on purpose: generated per-platform agents (install.sh --build).
 build/
+
+# Agent Overwatch runtime files
+!.overwatch/secret-allowlist
+.overwatch/watch.state

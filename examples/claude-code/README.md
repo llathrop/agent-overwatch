@@ -4,6 +4,17 @@ This guide explains how to install and configure the **Agent Overwatch** multi-a
 
 ---
 
+## 0. Recommended: install as a Claude Code plugin
+
+```text
+/plugin marketplace add llathrop/agent-overwatch
+/plugin install agent-overwatch@agent-overwatch
+```
+
+The plugin updates through `/plugin marketplace update agent-overwatch` (or marketplace auto-update) and ships the generated agents from `dist/claude/agents/`. See the root [README](../../README.md#claude-code-native-plugin-recommended) and the [plugin docs](https://code.claude.com/docs/en/plugins-reference).
+
+Without the plugin, `./install.sh --claude --global` (or `--workspace DIR`) copies the same files, and `--link` symlinks them so `git pull` updates them. Global installs add only a short pointer to `~/.claude/CLAUDE.md`. The illustrative definitions below are simplified; the installed agents are generated from `agents/*.md` by `./install.sh --build`.
+
 ## 1. Installation Layout
 
 You can install `agent-overwatch` globally (for all Claude Code projects on your system) or locally within a specific project.
@@ -11,16 +22,16 @@ You can install `agent-overwatch` globally (for all Claude Code projects on your
 ### Global Installation (User Scope)
 ```text
 ~/.claude/
-├── CLAUDE.md                             # Global defaults & rules
+├── CLAUDE.md                             # Short agent-overwatch pointer only
 ├── skills/
 │   └── agent-overwatch/
 │       ├── SKILL.md                      # Skill definition
 │       └── templates/                    # Handoff, Bus, and QA checklist templates
 └── agents/
-    ├── qa.md                             # QA Overwatch subagent
-    ├── dev.md                            # Development subagent
-    ├── deploy.md                         # Deployment subagent
-    └── research.md                       # Research & documentation subagent
+    ├── qa-agent.md                             # QA Overwatch subagent
+    ├── dev-agent.md                            # Development subagent
+    ├── deploy-agent.md                         # Deployment subagent
+    └── research-agent.md                       # Research & documentation subagent
 ```
 
 ### Project Installation (Workspace Scope)
@@ -33,10 +44,10 @@ You can install `agent-overwatch` globally (for all Claude Code projects on your
 │   │   └── agent-overwatch/
 │   │       └── SKILL.md
 │   └── agents/
-│       ├── qa.md
-│       ├── dev.md
-│       ├── deploy.md
-│       └── research.md
+│       ├── qa-agent.md
+│       ├── dev-agent.md
+│       ├── deploy-agent.md
+│       └── research-agent.md
 ```
 
 ---
@@ -64,10 +75,10 @@ Coordinates engineering tasks through specialized subagents, atomic branches, an
 
 ## 3. Subagent Definitions (`~/.claude/agents/*.md`)
 
-### QA Overwatch Subagent (`~/.claude/agents/qa.md`)
+### QA Overwatch Subagent (`~/.claude/agents/qa-agent.md`)
 ```markdown
 ---
-name: qa
+name: qa-agent
 description: Skeptical Quality Assurance auditor. Audits diffs, verifies unit test execution, confirms zero secret leaks, and evaluates rollback readiness. Holds veto authority.
 model: sonnet
 tools:
@@ -85,10 +96,10 @@ Your responsibilities:
 4. Issue structured verdicts: APPROVE or HOLD with specific required remediation steps.
 ```
 
-### Dev Subagent (`~/.claude/agents/dev.md`)
+### Dev Subagent (`~/.claude/agents/dev-agent.md`)
 ```markdown
 ---
-name: dev
+name: dev-agent
 description: Implements features and bugfixes on isolated atomic branches. Writes comprehensive tests and updates HANDOFF.md.
 model: sonnet
 tools:
@@ -96,7 +107,6 @@ tools:
   - Glob
   - Grep
   - Edit
-  - MultiEdit
   - Write
   - Bash
 ---
@@ -108,10 +118,10 @@ You are the Development Subagent.
 4. Request QA audit once tests pass cleanly.
 ```
 
-### Deploy Subagent (`~/.claude/agents/deploy.md`)
+### Deploy Subagent (`~/.claude/agents/deploy-agent.md`)
 ```markdown
 ---
-name: deploy
+name: deploy-agent
 description: Manages staged rollouts, environment migrations, and live health verification. Enforces pre-change backups and verified rollback commands.
 model: sonnet
 tools:
@@ -128,10 +138,10 @@ You are the Deployment Subagent.
 3. Verify post-deploy health: HTTP 200 health check responses, clean restart counts, error-free system logs.
 ```
 
-### Research Subagent (`~/.claude/agents/research.md`)
+### Research Subagent (`~/.claude/agents/research-agent.md`)
 ```markdown
 ---
-name: research
+name: research-agent
 description: Researches upstream libraries, diagnoses errors from logs, and reviews API documentation without modifying project code.
 model: haiku
 tools:

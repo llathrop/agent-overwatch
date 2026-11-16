@@ -1,0 +1,16 @@
+{
+  "name": "agent-overwatch",
+  "description": "Marketplace for the agent-overwatch Claude Code plugin.",
+  "owner": {
+    "name": "llathrop",
+    "url": "https://github.com/llathrop"
+  },
+  "plugins": [
+    {
+      "name": "agent-overwatch",
+      "source": "./",
+      "description": "Parallel multi-agent workflow skill with mandatory independent QA, plus qa/dev/deploy/research subagents.",
+      "category": "workflow"
+    }
+  ]
+}
