@@ -105,7 +105,7 @@ Other flags: `--ref BRANCH@SHA` to name a ref explicitly, `--bus PATH` for a non
 
 ### 3.3 Optional `QA_BUS.md` and `status/<agent>.md`
 
-- **`QA_BUS.md`:** Useful in high-throughput swarms when separating `QA APPROVE` / `QA HOLD` verdicts from general chatter helps the Coordinator track gates cleanly. Follows the exact same `cat <<'EOF' >> QA_BUS.md` rule.
+- **`QA_BUS.md`:** Useful in high-throughput swarms when separating `QA APPROVE` / `QA HOLD` verdicts from general chatter helps the Coordinator track gates cleanly. Append with `scripts/bus_append.sh --bus QA_BUS.md` (same rules as the main bus); fallback: a quoted heredoc append (`cat <<'EOF' >> QA_BUS.md`).
 - **`status/<agent>.md`:** Optional single-line/short-card snapshot per agent (e.g., `status/dev-1.md`, `status/qa-1.md`). An agent may overwrite **only its own** `status/<name>.md` file.
 
 ### 3.4 Committing the Bus Across Parallel Branches
