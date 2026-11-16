@@ -47,3 +47,6 @@ build/
 # Agent Overwatch runtime files
 !.overwatch/secret-allowlist
 .overwatch/watch.state
+
+# Local agent coordination bus (never tracked; HANDOFF.md is the tracked handoff)
+AGENT_BUS.md

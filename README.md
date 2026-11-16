@@ -119,12 +119,12 @@ agent-overwatch/
 ├── skills/agent-overwatch/                  # The skill: SKILL.md, references/, templates/, scripts/
 ├── tests/test_install.sh                    # Installer tests (temp HOME and workspaces only)
 ├── HANDOFF.md                               # This repo's own dev coordination state (not installed)
-└── AGENT_BUS.md                             # This repo's own dev coordination log (not installed)
+└── AGENT_BUS.md                             # This repo's local coordination log (git-ignored, not tracked, not installed)
 ```
 
 ## Status & Coordination
 
-[HANDOFF.md](HANDOFF.md) and [AGENT_BUS.md](AGENT_BUS.md) at the repo root are this repository's own development coordination log. They are not part of what gets installed. The installer and plugin ship only the skill, the agents, the commands, and the templates. Projects get their own copies from `init_workspace.sh`.
+[HANDOFF.md](HANDOFF.md) at the repo root is this repository's tracked development handoff, and the way to resume on another machine. `AGENT_BUS.md` is local agent coordination: it is git-ignored, never committed or pushed, and not an audit trail in git. Neither is part of what gets installed. The installer and plugin ship only the skill, the agents, the commands, and the templates. Projects get their own copies from `init_workspace.sh`.
 
 ## Tests
 

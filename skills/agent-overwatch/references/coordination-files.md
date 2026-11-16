@@ -15,7 +15,7 @@ Always prefer the host runtime's native coordination primitives over file pollin
 | **Native agent teams / shared task board** | **Superseded by** native teammate messaging & shared task list | Optional for cross-session persistence | Maintained at milestones/handoffs |
 | **Plain CLI / Multi-Tool / Cross-Session** | **Required:** `AGENT_BUS.md` (and optional `QA_BUS.md`) | **Primary append-only coordination bus** | **Required living state file** |
 
-**Rule:** Never force agents to duplicate every native board post into `AGENT_BUS.md`. Either use the native board for live turn-to-turn traffic OR use `AGENT_BUS.md` when no native board exists or when a durable repo log is explicitly needed.
+**Rule:** Never force agents to duplicate every native board post into `AGENT_BUS.md`. Either use the native board for live turn-to-turn traffic OR use `AGENT_BUS.md` when no native board exists or when a local shared log is needed (the bus is not committed; durable cross-machine state goes in `HANDOFF.md`).
 
 ---
 
@@ -108,15 +108,12 @@ Other flags: `--ref BRANCH@SHA` to name a ref explicitly, `--bus PATH` for a non
 - **`QA_BUS.md`:** Useful in high-throughput swarms when separating `QA APPROVE` / `QA HOLD` verdicts from general chatter helps the Coordinator track gates cleanly. Append with `scripts/bus_append.sh --bus QA_BUS.md` (same rules as the main bus); fallback: a quoted heredoc append (`cat <<'EOF' >> QA_BUS.md`).
 - **`status/<agent>.md`:** Optional single-line/short-card snapshot per agent (e.g., `status/dev-1.md`, `status/qa-1.md`). An agent may overwrite **only its own** `status/<name>.md` file.
 
-### 3.4 Committing the Bus Across Parallel Branches
+### 3.4 The Bus Is Local, Not Committed
 
-When `AGENT_BUS.md` is committed and several branches each append to it, ordinary merges conflict at the file end. `init_workspace.sh` adds this line to `.gitattributes`:
+`AGENT_BUS.md` is local agent coordination. It is listed in `.gitignore` (`init_workspace.sh` adds the entry) and is neither committed nor pushed, so it is not an audit trail in git and needs no merge rule. Branches never conflict on it.
 
-```text
-AGENT_BUS.md merge=union
-```
-
-Union merge keeps both sides' appended lines. It is safe only because the bus is append-only; never use it for `HANDOFF.md`.
+- With parallel worktrees, keep one bus in the primary checkout and pass `--bus <path>` to `bus_append.sh` from every lane.
+- `HANDOFF.md` is the tracked file. Anything another machine or a later session must know (state, decisions, next steps) goes there; cross-machine handoff goes through `HANDOFF.md`, never the bus.
 
 ---
 

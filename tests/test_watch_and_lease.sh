@@ -326,12 +326,12 @@ I="$TMP/init"
 out="$(bash "$INIT" "$I/dry" --dry-run 2>&1)"; rc=$?
 check "init --dry-run exits 0" test "$rc" -eq 0
 check "init --dry-run writes nothing" test ! -e "$I/dry"
-check "init --dry-run mentions .gitattributes" contains "$out" ".gitattributes"
+check "init --dry-run mentions .gitignore" contains "$out" ".gitignore"
 
 bash "$INIT" "$I/root" >/dev/null 2>&1; rc=$?
 check "init exits 0" test "$rc" -eq 0
-check ".gitattributes has AGENT_BUS union" grep -qx 'AGENT_BUS.md merge=union' "$I/root/.gitattributes"
-check ".gitattributes has QA_BUS union" grep -qx 'QA_BUS.md merge=union' "$I/root/.gitattributes"
+check ".gitignore ignores AGENT_BUS.md" grep -qx 'AGENT_BUS.md' "$I/root/.gitignore"
+check "init writes no .gitattributes union rule" test ! -e "$I/root/.gitattributes"
 check "secret-allowlist created" test -f "$I/root/.overwatch/secret-allowlist"
 check "secret-allowlist examples are all commented" \
   test -z "$(grep -vE '^[[:space:]]*(#|$)' "$I/root/.overwatch/secret-allowlist")"
@@ -339,13 +339,17 @@ check "no lease placeholder created" test ! -e "$I/root/status/coordinator.lease
 check "HANDOFF has Coordinator section" grep -q '^## Coordinator' "$I/root/HANDOFF.md"
 check "HANDOFF has size-cap guidance" grep -qF 'keep each cell/bullet ≤ 200 chars' "$I/root/HANDOFF.md"
 bash "$INIT" "$I/root" >/dev/null 2>&1
-check "re-run does not duplicate .gitattributes lines" test "$(grep -c 'merge=union' "$I/root/.gitattributes")" -eq 2
+check "re-run does not duplicate .gitignore line" test "$(grep -c '^AGENT_BUS.md$' "$I/root/.gitignore")" -eq 1
 
-mkdir -p "$I/pre"; printf '*.png binary' > "$I/pre/.gitattributes"
-bash "$INIT" "$I/pre" --no-bus >/dev/null 2>&1
-check "existing .gitattributes kept and extended" \
-  test "$(cat "$I/pre/.gitattributes")" = "$(printf '*.png binary\nAGENT_BUS.md merge=union\nQA_BUS.md merge=union')"
-check "--no-bus still skips AGENT_BUS.md" test ! -e "$I/pre/AGENT_BUS.md"
+mkdir -p "$I/pre"; printf '*.png' > "$I/pre/.gitignore"
+bash "$INIT" "$I/pre" >/dev/null 2>&1
+check "existing .gitignore kept and extended" \
+  test "$(cat "$I/pre/.gitignore")" = "$(printf '*.png\nAGENT_BUS.md')"
+mkdir -p "$I/nobus"
+bash "$INIT" "$I/nobus" --no-bus >/dev/null 2>&1
+check "--no-bus skips AGENT_BUS.md and its ignore line" test ! -e "$I/nobus/AGENT_BUS.md" -a ! -e "$I/nobus/.gitignore"
+out="$(bash "$INIT" "$I/note" 2>&1)"
+check "init prints local-bus note" contains "$out" "local coordination"
 
 bash "$INIT" "$I/root/svc" --subdir >/dev/null 2>&1; rc=$?
 check "init --subdir exits 0" test "$rc" -eq 0
