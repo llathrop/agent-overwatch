@@ -117,10 +117,8 @@ Match model cost and reasoning depth to the cognitive risk of each role. Tiers a
 | Tier | Capability | Best Fit Roles & Tasks |
 | --- | --- | --- |
 | **Economy** | Small, fast, low-cost | Log parsing, file/inventory checks, status formatting, boilerplate scaffolding |
-| **Standard** | Balanced general-purpose | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks, routine QA re-reviews |
-| **Frontier** | Strongest reasoning available | **`qa-agent` overwatch for high-risk audits**, subtle debugging, security audits, complex `research-agent` architecture |
-
-**QA tier rule (proposal until adopted):** QA runs on the frontier tier for high-risk audits and on the standard tier for routine re-reviews. Until the project adopts this cost rule, run QA on the strongest tier available.
+| **Standard** | Balanced general-purpose | Routine `dev-agent` features/tests, documentation, standard `deploy-agent` runbooks |
+| **Frontier** | Strongest reasoning available | **Mandatory `qa-agent` overwatch**, subtle debugging, security audits, complex `research-agent` architecture |
 
 **Graceful Fallback Rule (Mandatory):** If tiered model selection is unavailable, restricted by platform/orchestrator policy (for example, inherit-only swarm workers), or blocked by quota, **run all agents on the default/inherited model**. Never stall waiting on a specific tier when the default model is healthy.
 

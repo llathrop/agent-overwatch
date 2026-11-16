@@ -11,10 +11,8 @@ Use cheaper/faster models for mechanical tasks and reserve high-reasoning fronti
 | Tier | Capability | Assigned Tasks & Roles | Why |
 | --- | --- | --- | --- |
 | **Economy** | Small, fast, low-cost models | File/tree inventories, log filtering, formatting/lint cleanup, boilerplate test stubs, quick status summarization | High token throughput, low latency and cost on deterministic/low-risk operations |
-| **Standard** | Balanced general-purpose models | Routine `dev-agent` feature slices, unit tests, reference docs, standard `deploy-agent` checklist execution, routine QA re-reviews of small, low-risk diffs | Balanced reasoning, code fluency, and cost for well-scoped specifications |
-| **Frontier** | Strongest available reasoning models | **Mandatory `qa-agent` overwatch for high-risk audits**, security/concurrency reviews, complex `research-agent` root-cause debugging, subtle architectural design | Maximizes defect catch rate before code merges or infrastructure mutates |
-
-**QA tier rule:** QA runs on the frontier tier for high-risk audits (security, concurrency, data migration, infrastructure mutation, first review of a new branch) and may run on the standard tier for routine re-reviews (re-checking a small fix after a HOLD). Independence still applies at every tier: QA never reviews its own work. This QA cost rule is a **proposal until adopted** by the project; until then, run QA on the strongest tier available.
+| **Standard** | Balanced general-purpose models | Routine `dev-agent` feature slices, unit tests, reference docs, standard `deploy-agent` checklist execution | Balanced reasoning, code fluency, and cost for well-scoped specifications |
+| **Frontier** | Strongest available reasoning models | **Mandatory `qa-agent` overwatch**, security/concurrency reviews, complex `research-agent` root-cause debugging, subtle architectural design | Maximizes defect catch rate before code merges or infrastructure mutates |
 
 **Vendor examples (illustrative only, not requirements; map to whatever your runtime offers):**
 
