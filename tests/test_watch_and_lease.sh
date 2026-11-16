@@ -103,6 +103,19 @@ printf -- '- api_key: <your-key-here>\n- token=${GITHUB_TOKEN}\n' >> AGENT_BUS.m
 out="$(bash "$WATCH" "${W_ARGS[@]}")"
 check "placeholder values not flagged" test -z "$out"
 
+# No --check at all must not trip `set -u` on empty arrays (bash < 4.4).
+out="$(bash "$WATCH" "${W_ARGS[@]}" 2>&1)"; rc=$?
+check "watch with no --check exits 0 and prints nothing" test "$rc" -eq 0 -a -z "$out"
+
+# An invalid allowlist regex warns on stderr and the valid ones still apply.
+printf '\n- commit_token: %s\n' "$SHA40" >> AGENT_BUS.md
+printf '([unclosed\n^[0-9a-f]{40}$\n' > "$W/allow"
+err="$(bash "$WATCH" "${W_ARGS[@]}" 2>&1 >/dev/null)"
+check "invalid allowlist regex warned on stderr" contains "$err" "invalid allowlist regex"
+out="$(bash "$WATCH" "${W_ARGS[@]}" 2>/dev/null)"
+check "valid allowlist entries still apply" test -z "$out"
+printf '# git SHAs\n\n^[0-9a-f]{40}$\n' > "$W/allow"
+
 # -------------------------------------------------------------- watch: checks
 out="$(bash "$WATCH" "${W_ARGS[@]}" --check 'true' --check 'echo first; echo "db unreachable"; exit 3')"
 check "failing --check reported with its index" contains "$out" "CHECK-FAIL 2: db unreachable"
@@ -194,6 +207,87 @@ check "id with '|' rejected (exit 2)" test "$rc" -eq 2
 bash "$LEASE" claim --id x --ttl -1 --file "$LF" >/dev/null 2>&1; rc=$?
 check "negative ttl rejected (exit 2)" test "$rc" -eq 2
 
+# ------------------------------------------------- lease: hardening (HOLD fixes)
+H="$TMP/hard"; mkdir -p "$H"; cd "$H" || exit 1
+HF="$H/status/coordinator.lease"
+
+bash "$LEASE" claim --id "$FAKE_GH" --file "$HF" >"$H/o" 2>&1; rc=$?
+check "secret-looking id rejected (exit 2)" test "$rc" -eq 2
+check "rejected id value not echoed" not_contains "$(cat "$H/o")" "$FAKE_GH"
+check "rejected id writes no lease" test ! -e "$HF"
+
+mkdir -p "$H/status"
+printf 'id=%s\nsince=x\nlast_seen=2026-01-01 00:00:00 UTC\nttl_min=0\nlast_seen_epoch=1\n' "$FAKE_GH" > "$HF"
+out="$(bash "$WATCH" --once --bus /dev/null --lease "$HF" --state "$H/ws" --allowlist /dev/null 2>/dev/null)"
+check "watch redacts a secret-looking lease id" contains "$out" "LEASE stale: <redacted id: possible secret>"
+check "watch never prints the lease id secret" not_contains "$out" "$FAKE_GH"
+
+# CRLF lease written on another OS is still read as live.
+printf 'id=alpha\r\nsince=x\r\nlast_seen=x\r\nttl_min=30\r\nlast_seen_epoch=%s\r\n' "$(date -u +%s)" > "$HF"
+bash "$LEASE" status --id beta --file "$HF" >/dev/null; rc=$?
+check "CRLF lease is read as live (exit 3)" test "$rc" -eq 3
+
+# BRIEF-minimal keys (id/since/last_seen) are understood.
+printf 'id=alpha\nsince=%s\nlast_seen=%s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" > "$HF"
+bash "$LEASE" status --id beta --file "$HF" >/dev/null; rc=$?
+check "BRIEF-key lease with fresh last_seen is live (exit 3)" test "$rc" -eq 3
+printf 'id=alpha\nsince=2020-01-01 00:00:00 UTC\nlast_seen=2020-01-01T00:00:00Z\n' > "$HF"
+bash "$LEASE" status --id beta --file "$HF" >/dev/null; rc=$?
+check "BRIEF-key lease with old last_seen is expired (exit 4)" test "$rc" -eq 4
+out="$(bash "$WATCH" --once --bus /dev/null --lease "$HF" --state "$H/ws2" --allowlist /dev/null 2>/dev/null)"
+check "watch flags a stale BRIEF-key lease" contains "$out" "LEASE stale: alpha last_seen 2020-01-01T00:00:00Z"
+rm -f "$HF"
+
+# PATH without flock, to exercise the exclusive-create lock fallback.
+NOFLOCK="$TMP/noflock-bin"; mkdir -p "$NOFLOCK"
+IFS=: read -r -a _pdirs <<< "$PATH"
+for d in "${_pdirs[@]}"; do
+  [[ -d "$d" ]] || continue
+  for f in "$d"/*; do
+    b="${f##*/}"
+    [[ "$b" == flock || -e "$NOFLOCK/$b" || ! -x "$f" ]] && continue
+    ln -s "$f" "$NOFLOCK/$b" 2>/dev/null
+  done
+done
+check "flock hidden from the test PATH" test -z "$(PATH="$NOFLOCK" command -v flock)"
+
+race() { # $1 = lease file, $2 = PATH to use -> prints number of winners
+  local f="$1" p="$2" i
+  rm -rf "$(dirname "$f")"; mkdir -p "$(dirname "$f")"
+  for i in $(seq 1 20); do
+    ( PATH="$p" bash "$LEASE" claim --id "racer-$i" --file "$f" >/dev/null 2>&1; echo $? > "$f.rc.$i" ) &
+  done
+  wait
+  grep -lx 0 "$f".rc.* | wc -l | tr -d ' '
+}
+won="$(race "$H/r1/coordinator.lease" "$NOFLOCK")"
+check "no-flock race: exactly 1 of 20 claims wins (got $won)" test "$won" -eq 1
+check "no-flock race: losers exit 3" test "$(grep -lx 3 "$H/r1/coordinator.lease".rc.* | wc -l | tr -d ' ')" -eq 19
+check "no-flock race: no errors (exit 1)" test -z "$(grep -lx 1 "$H/r1/coordinator.lease".rc.* 2>/dev/null)"
+check "no-flock race: lock file released" test ! -e "$H/r1/coordinator.lease.excl.lock"
+if command -v flock >/dev/null 2>&1; then
+  won="$(race "$H/r2/coordinator.lease" "$PATH")"
+  check "flock race: exactly 1 of 20 claims wins (got $won)" test "$won" -eq 1
+fi
+
+# Stale exclusive lock (dead owner pid) is reaped; a live one times out.
+SL="$H/s/coordinator.lease"; mkdir -p "$H/s"
+bash -c 'exit 0' & deadpid=$!; wait "$deadpid"
+printf '%s %s\n' "$deadpid" "$(date -u +%s)" > "$SL.excl.lock"
+PATH="$NOFLOCK" bash "$LEASE" claim --id solo --file "$SL" >/dev/null 2>&1; rc=$?
+check "stale lock from a dead pid is reaped (claim exit 0)" test "$rc" -eq 0
+check "reaped lock is gone after claim" test ! -e "$SL.excl.lock"
+printf '%s %s\n' "$$" "$(date -u +%s)" > "$SL.excl.lock"
+start=$(date -u +%s)
+AO_LEASE_LOCK_WAIT=1 PATH="$NOFLOCK" bash "$LEASE" renew --id solo --file "$SL" >/dev/null 2>&1; rc=$?
+check "live lock held elsewhere times out with exit 1" test "$rc" -eq 1
+check "lock wait is bounded" test $(( $(date -u +%s) - start )) -le 4
+check "live lock is not removed by the waiter" test -f "$SL.excl.lock"
+printf '%s %s\n' "$$" "1" > "$SL.excl.lock"
+PATH="$NOFLOCK" bash "$LEASE" renew --id solo --file "$SL" >/dev/null 2>&1; rc=$?
+check "lock older than the stale age is reaped even with a live pid" test "$rc" -eq 0
+rm -f "$SL.excl.lock"
+
 # ---------------------------------------------------------- init_workspace.sh
 I="$TMP/init"
 out="$(bash "$INIT" "$I/dry" --dry-run 2>&1)"; rc=$?
@@ -223,6 +317,9 @@ check "--no-bus still skips AGENT_BUS.md" test ! -e "$I/pre/AGENT_BUS.md"
 bash "$INIT" "$I/root/svc" --subdir >/dev/null 2>&1; rc=$?
 check "init --subdir exits 0" test "$rc" -eq 0
 check "subdir HANDOFF has Coordinator section" grep -q '^## Coordinator' "$I/root/svc/HANDOFF.md"
+out="$(bash "$INIT" "$I/root/svc2" --subdir 2>&1)"
+check "subdir lease hint points at the root lease" contains "$out" "--file $I/root/status/coordinator.lease "
+check "subdir lease hint does not point inside the subdir" not_contains "$out" "$I/root/svc2/status/coordinator.lease"
 printf 'changed\n' > "$I/root/.overwatch/secret-allowlist"
 bash "$INIT" "$I/root" --force >/dev/null 2>&1
 check "--force rewrites the allowlist" grep -qF 'Secret-scan allowlist' "$I/root/.overwatch/secret-allowlist"

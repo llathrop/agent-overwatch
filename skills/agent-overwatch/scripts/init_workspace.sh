@@ -454,8 +454,14 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[DRY-RUN] Would report coordinator lease status (status/coordinator.lease is not pre-created)"
 elif [[ -f "$LEASE_SCRIPT" ]]; then
   echo "[INFO] Coordinator lease status:"
-  (cd "$TARGET_ABS" && bash "$LEASE_SCRIPT" status --id "init_workspace" 2>&1 | sed 's/^/         /') || true
-  echo "[HINT] Claim it with: $LEASE_SCRIPT claim --file $TARGET_ABS/status/coordinator.lease (set AO_COORDINATOR_ID for a stable id)"
+  # A subproject is governed by the root lease (see SUBDIR_HANDOFF.template.md).
+  LEASE_ROOT="$TARGET_ABS"
+  if [[ "$IS_SUBDIR" == true ]]; then
+    LEASE_ROOT="$(cd "$TARGET_ABS/$(dirname "$PARENT_HANDOFF_REL")" 2>/dev/null && pwd || echo "$TARGET_ABS")"
+  fi
+  LEASE_PATH="$LEASE_ROOT/status/coordinator.lease"
+  bash "$LEASE_SCRIPT" status --id "init_workspace" --file "$LEASE_PATH" 2>&1 | sed 's/^/         /' || true
+  echo "[HINT] Claim it with: $LEASE_SCRIPT claim --file $LEASE_PATH (set AO_COORDINATOR_ID for a stable id)"
 fi
 
 # 7. Hints for local runtime files

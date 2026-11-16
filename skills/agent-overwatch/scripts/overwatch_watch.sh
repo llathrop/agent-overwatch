@@ -109,11 +109,24 @@ WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ao-watch.XXXXXX")" || exit 0
 trap 'rm -rf "$WORK_DIR"' EXIT
 ALLOW_CLEAN="$WORK_DIR/allow"
 
+# Keep valid patterns only; an invalid ERE is dropped with a warning instead of
+# silently breaking every other allowlist entry.
 load_allowlist() {
   : > "$ALLOW_CLEAN"
-  if [[ -f "$ALLOWLIST" ]]; then
-    grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST" > "$ALLOW_CLEAN" 2>/dev/null || true
-  fi
+  [[ -f "$ALLOWLIST" ]] || return 0
+  local pat n=0 rc
+  while IFS= read -r pat || [[ -n "$pat" ]]; do
+    n=$((n + 1))
+    pat="${pat%$'\r'}"
+    [[ "$pat" =~ ^[[:space:]]*(#|$) ]] && continue
+    # Non-empty input: busybox grep only compiles the regex once it reads a line.
+    printf 'x\n' | grep -qE -- "$pat" 2>/dev/null; rc=$?
+    if (( rc == 2 )); then
+      echo "[WARN] ignoring invalid allowlist regex at ${ALLOWLIST}:${n}" >&2
+      continue
+    fi
+    printf '%s\n' "$pat" >> "$ALLOW_CLEAN"
+  done < "$ALLOWLIST"
 }
 
 allowlisted() { # $1 = text
@@ -164,6 +177,7 @@ read_state() {
   [[ -f "$STATE" ]] || return 0
   local k v
   while IFS='=' read -r k v; do
+    v="${v%$'\r'}"
     case "$k" in
       offset) S_OFFSET="$v" ;;
       offset_hash) S_OFFSET_HASH="$v" ;;
@@ -182,8 +196,8 @@ write_state() {
   mv -f "$tmp" "$STATE"
 }
 
-line_hash() { # $1=file $2=line number -> short hash of that line
-  sed -n "${2}p" "$1" | cksum | cut -d' ' -f1
+prefix_hash() { # $1=file $2=line count -> hash of the first N lines
+  head -n "$2" "$1" | cksum | cut -d' ' -f1
 }
 
 # ------------------------------- bus pass ------------------------------------
@@ -199,7 +213,7 @@ check_bus() {
 
   if [[ -z "$S_OFFSET" ]]; then
     if [[ "$SINCE_NOW" == true ]]; then
-      S_OFFSET="$total"; S_OFFSET_HASH="$( [[ $total -gt 0 ]] && line_hash "$BUS" "$total" )"
+      S_OFFSET="$total"; S_OFFSET_HASH="$( [[ $total -gt 0 ]] && prefix_hash "$BUS" "$total" )"
       return 0
     fi
     offset=0
@@ -209,8 +223,8 @@ check_bus() {
     if (( offset > total )); then
       echo "BUS: (bus shrank from $offset to $total lines; rescanning from the top)"
       offset=0
-    elif (( offset > 0 )) && [[ "$(line_hash "$BUS" "$offset")" != "$S_OFFSET_HASH" ]]; then
-      echo "BUS: (bus rewritten before line $offset; rescanning from the top)"
+    elif (( offset > 0 )) && [[ "$(prefix_hash "$BUS" "$offset")" != "$S_OFFSET_HASH" ]]; then
+      echo "BUS: (bus rewritten within its first $offset lines; rescanning from the top)"
       offset=0
     fi
   fi
@@ -234,13 +248,13 @@ check_bus() {
     fi
   fi
   S_OFFSET="$total"
-  S_OFFSET_HASH="$( (( total > 0 )) && line_hash "$BUS" "$total" )"
+  S_OFFSET_HASH="$( (( total > 0 )) && prefix_hash "$BUS" "$total" )"
 }
 
 # ------------------------------ checks ---------------------------------------
 run_checks() {
   local i=0 cmd out rc last
-  for cmd in "${CHECKS[@]}"; do
+  for cmd in ${CHECKS[@]+"${CHECKS[@]}"}; do
     i=$((i + 1))
     if command -v timeout >/dev/null 2>&1; then
       out="$(timeout "$CHECK_TIMEOUT" bash -c "$cmd" 2>&1 < /dev/null)"; rc=$?
@@ -258,21 +272,37 @@ run_checks() {
 }
 
 # ------------------------------ lease ----------------------------------------
+# "YYYY-MM-DD HH:MM:SS UTC" or ISO "YYYY-MM-DDTHH:MM:SSZ" -> epoch (GNU/busybox/BSD date)
+ts_to_epoch() {
+  local t="${1% UTC}"; t="${t%Z}"; t="${t/T/ }"
+  local re='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}(:[0-9]{2})?$'
+  [[ "$t" =~ $re ]] || return 1
+  [[ ${#t} -eq 16 ]] && t="$t:00"
+  date -u -d "$t" +%s 2>/dev/null || date -u -j -f '%Y-%m-%d %H:%M:%S' "$t" +%s 2>/dev/null
+}
+
 check_lease() {
   [[ -f "$LEASE" ]] || return 0
   local k v id="" last_seen="" epoch="" ttl="" now key
   while IFS='=' read -r k v; do
+    v="${v%$'\r'}"
     case "$k" in
       id) id="$v" ;; last_seen) last_seen="$v" ;;
       last_seen_epoch) epoch="$v" ;; ttl_min) ttl="$v" ;;
     esac
   done < "$LEASE"
   [[ -n "$id" ]] || return 0
+  # Never echo lease fields that look like credentials (a hand-edited file).
+  if has_secret "$id"; then id="<redacted id: possible secret>"; fi
+  if has_secret "$last_seen"; then last_seen="<redacted>"; fi
   if [[ -n "$S_LEASE_ID" && "$S_LEASE_ID" != "$id" ]]; then
     echo "LEASE holder changed: $S_LEASE_ID -> ${id}"
   fi
   S_LEASE_ID="$id"
-  [[ "$epoch" =~ ^[0-9]+$ && "$ttl" =~ ^[0-9]+$ ]] || return 0
+  # BRIEF-minimal leases (id/since/last_seen only): derive epoch, default ttl 30.
+  [[ "$epoch" =~ ^[0-9]+$ ]] || epoch="$(ts_to_epoch "$last_seen" || true)"
+  [[ "$ttl" =~ ^[0-9]+$ ]] || ttl=30
+  [[ "$epoch" =~ ^[0-9]+$ ]] || return 0
   now="$(date -u +%s)"
   if (( now >= epoch + ttl * 60 )); then
     key="${id}|${epoch}"

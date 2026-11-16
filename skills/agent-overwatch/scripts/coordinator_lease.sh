@@ -80,8 +80,22 @@ if [[ -z "$ID" ]]; then
   ID="$(id -un 2>/dev/null || echo user)@$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo host):${PPID}"
 fi
 # The id lands in a key=value file and a bus header: keep it to one safe line.
-[[ "$ID" =~ ^[A-Za-z0-9@._:/+()\ -]{1,120}$ ]] || die_usage "--id may only contain letters, digits, spaces and @._:/+()- (max 120)"
+ID_RE='^[A-Za-z0-9@._:/+() -]{1,120}$'
+[[ "$ID" =~ $ID_RE ]] || die_usage "--id may only contain letters, digits, spaces and @._:/+()- (max 120)"
 [[ "$TAKEOVER" == false || "$ACTION" == claim ]] || die_usage "--takeover is only valid with claim"
+
+# Same pattern family as overwatch_watch.sh / verify_atomic_branch.sh. The id is
+# written to the lease file and the bus, so a credential-looking id is refused.
+looks_like_secret() {
+  local re
+  for re in 'BEGIN[[:space:]]+([A-Za-z0-9_-]+[[:space:]]+)?PRIVATE KEY' 'tskey-auth-[a-zA-Z0-9_-]+' \
+            'ghp_[a-zA-Z0-9]{20,}' 'github_pat_[a-zA-Z0-9_]{20,}' 'sk-[a-zA-Z0-9_-]{20,}' 'AKIA[0-9A-Z]{16}' \
+            '(password|token|secret|api_?key)[[:space:]]*[:=][[:space:]]*[^[:space:]]{8,}'; do
+    if printf '%s\n' "$1" | grep -qiE -- "$re"; then return 0; fi
+  done
+  return 1
+}
+if looks_like_secret "$ID"; then die_usage "--id matches a secret pattern; refusing (value not shown)"; fi
 
 now_epoch() { date -u +%s; }
 now_ts() { date -u '+%Y-%m-%d %H:%M:%S UTC'; }
@@ -92,6 +106,7 @@ read_lease() {
   [[ -f "$FILE" ]] || return 1
   local k v
   while IFS='=' read -r k v; do
+    v="${v%$'\r'}"
     case "$k" in
       id) L_ID="$v" ;; since) L_SINCE="$v" ;; last_seen) L_LAST="$v" ;;
       ttl_min) L_TTL="$v" ;; last_seen_epoch) L_EPOCH="$v" ;;
@@ -100,10 +115,23 @@ read_lease() {
   [[ -n "$L_ID" ]]
 }
 
-# 0 = live, 1 = expired (a malformed lease counts as expired)
+# "YYYY-MM-DD HH:MM:SS UTC" or ISO "YYYY-MM-DDTHH:MM:SSZ" -> epoch (GNU/busybox/BSD date)
+ts_to_epoch() {
+  local t="${1% UTC}" re='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}(:[0-9]{2})?$'
+  t="${t%Z}"; t="${t/T/ }"
+  [[ "$t" =~ $re ]] || return 1
+  [[ ${#t} -eq 16 ]] && t="$t:00"
+  date -u -d "$t" +%s 2>/dev/null || date -u -j -f '%Y-%m-%d %H:%M:%S' "$t" +%s 2>/dev/null
+}
+
+# 0 = live, 1 = expired. A lease with only the BRIEF keys (id/since/last_seen)
+# gets its epoch from last_seen and ttl 30; an unparseable lease counts as expired.
 lease_live() {
-  [[ "$L_EPOCH" =~ ^[0-9]+$ && "$L_TTL" =~ ^[0-9]+$ ]] || return 1
-  (( $(now_epoch) < L_EPOCH + L_TTL * 60 ))
+  local epoch="$L_EPOCH" ttl="$L_TTL"
+  [[ "$epoch" =~ ^[0-9]+$ ]] || epoch="$(ts_to_epoch "$L_LAST" || true)"
+  [[ "$ttl" =~ ^[0-9]+$ ]] || ttl=30
+  [[ "$epoch" =~ ^[0-9]+$ ]] || return 1
+  (( $(now_epoch) < epoch + ttl * 60 ))
 }
 
 write_lease() { # $1 = since
@@ -199,15 +227,104 @@ do_release() {
   echo "[OK] lease released by $ID"
 }
 
-# Serialize read-modify-write between concurrent callers.
+# Serialize read-modify-write between concurrent callers: flock when present,
+# else an exclusive-create lock file (<file>.excl.lock, bash noclobber = O_EXCL)
+# with a bounded wait and stale reaping. The mkdir command is not used: some
+# coreutils builds (e.g. uutils mkdir) are not atomic under races.
+LOCK_WAIT="${AO_LEASE_LOCK_WAIT:-10}"    # seconds to wait for the lock
+LOCK_STALE=300                           # a lock older than this is stale even if its pid lives
+LOCK_F=""
+OWN_LOCK=false
+
+# O_EXCL create with "<pid> <epoch>" as content; fails if the file exists.
+excl_create() { # $1 = path
+  ( set -o noclobber; printf '%s %s\n' "$$" "$(now_epoch)" > "$1" ) 2>/dev/null
+}
+
+# shellcheck disable=SC2329  # invoked via trap
+release_excl_lock() {
+  if [[ "$OWN_LOCK" == true ]]; then
+    rm -f "$LOCK_F"
+    OWN_LOCK=false
+  fi
+}
+
+# kill -0 fails with EPERM for another user's live process: count that as alive.
+pid_alive() {
+  local err
+  err="$(kill -0 "$1" 2>&1)" && return 0
+  [[ "$err" == *ermit* ]]
+}
+
+# Stale if the owner pid is gone, or the lock is older than LOCK_STALE, or it is
+# empty and over a minute old (holder died between create and write).
+lock_is_stale() { # $1 = lock path; prints the owner line it judged, for re-checking
+  local owner pid started
+  [[ -f "$1" ]] || return 1
+  owner="$(cat "$1" 2>/dev/null || true)"
+  if [[ -z "$owner" ]]; then
+    [[ -n "$(find "$1" -maxdepth 0 -mmin +1 2>/dev/null)" ]] || return 1
+    echo "empty"; return 0
+  fi
+  pid="${owner%% *}"; started="${owner#* }"
+  [[ "$pid" =~ ^[0-9]+$ && "$started" =~ ^[0-9]+$ ]] || { echo "$owner"; return 0; }
+  if ! pid_alive "$pid" || (( $(now_epoch) - started > LOCK_STALE )); then
+    echo "$owner"; return 0
+  fi
+  return 1
+}
+
+# One reaper at a time (its own exclusive lock file). It re-checks that the
+# owner line is unchanged before removing, so a lock a live process just took is
+# never deleted: only the owner releases, and a dead owner cannot re-take it.
+reap_stale_lock() {
+  local reap="${LOCK_F}.reap" seen again
+  seen="$(lock_is_stale "$LOCK_F")" || return 0
+  if ! excl_create "$reap"; then
+    # A reaper killed mid-reap leaves this behind; clear it once it is stale.
+    if lock_is_stale "$reap" >/dev/null; then rm -f "$reap"; fi
+    return 0
+  fi
+  if again="$(lock_is_stale "$LOCK_F")" && [[ "$again" == "$seen" ]]; then
+    echo "[WARN] removing stale lease lock $LOCK_F (owner: $seen)" >&2
+    rm -f "$LOCK_F"
+  fi
+  rm -f "$reap"
+}
+
+acquire_excl_lock() {
+  local deadline
+  LOCK_F="${FILE}.excl.lock"
+  deadline=$(( $(now_epoch) + LOCK_WAIT ))
+  while ! excl_create "$LOCK_F"; do
+    if [[ ! -e "$LOCK_F" ]]; then
+      # Released between our attempt and this check: retry, unless create cannot work.
+      [[ -w "$(dirname "$LOCK_F")" ]] || { echo "[ERROR] cannot create lock $LOCK_F" >&2; exit 1; }
+      continue
+    fi
+    reap_stale_lock
+    if (( $(now_epoch) >= deadline )); then
+      echo "[ERROR] timed out after ${LOCK_WAIT}s waiting for lock $LOCK_F (remove it if no lease command is running)" >&2
+      exit 1
+    fi
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  OWN_LOCK=true
+  trap release_excl_lock EXIT
+  trap 'exit 1' INT TERM HUP
+}
+
 run_locked() {
-  local dir lock
+  local dir
   dir="$(dirname "$FILE")"
-  if [[ "$ACTION" != status ]]; then mkdir -p "$dir" || exit 1; fi
-  lock="${FILE}.lock"
-  if [[ "$ACTION" != status ]] && command -v flock >/dev/null 2>&1; then
-    exec 8> "$lock" || exit 1
-    flock -x 8
+  if [[ "$ACTION" != status ]]; then
+    mkdir -p "$dir" || exit 1
+    if command -v flock >/dev/null 2>&1; then
+      exec 8> "${FILE}.lock" || exit 1
+      flock -x 8
+    else
+      acquire_excl_lock
+    fi
   fi
   case "$ACTION" in
     claim) do_claim ;; renew) do_renew ;; release) do_release ;; status) do_status ;;

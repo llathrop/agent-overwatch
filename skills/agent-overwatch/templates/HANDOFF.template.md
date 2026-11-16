@@ -26,7 +26,7 @@
 
 ## Coordinator
 
-- **Lease file:** `status/coordinator.lease` (key=value: `id`, `since`, `last_seen` UTC, `ttl_min`). Never hand-edit it.
+- **Lease file:** `status/coordinator.lease`, written only by `coordinator_lease.sh`. Never hand-edit it. Keys (key=value): `id`, `since`, `last_seen` (UTC, `YYYY-MM-DD HH:MM:SS UTC`), `ttl_min` and `last_seen_epoch`. A lease with only `id`/`since`/`last_seen` is read with ttl 30.
 - **Check it before acting:** `coordinator_lease.sh status` (exit 0 = you hold it, 3 = another live session holds it, 4 = expired or none).
 - **Hold it while coordinating:** `coordinator_lease.sh claim`, then `renew` at least every `ttl_min` minutes (set `AO_COORDINATOR_ID` for a stable id).
 - **Takeover rule:** take over a live lease only when its holder is known to be gone, with `coordinator_lease.sh claim --takeover`, which posts a `TAKEOVER` bus entry. A returning coordinator that finds exit 3 must stop, read this file and the bus tail, and post before touching `main`.
